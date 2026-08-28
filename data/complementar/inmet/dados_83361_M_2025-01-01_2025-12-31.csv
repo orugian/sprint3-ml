@@ -1,0 +1,24 @@
+Nome: CUIABA
+Codigo Estacao: 83361
+Latitude: -15.61999999
+Longitude: -56.10888888
+Altitude: 157.7
+Situacao: Operante
+Data Inicial: 2025-01-01
+Data Final: 2025-12-31
+Periodicidade da Medicao: Mensal
+
+Data Medicao;DIRECAO PREDOMINANTE DO VENTO, MENSAL(° (gr));EVAPORACAO DO PICHE, MENSAL(mm);EVAPOTRANSPIRACAO POTENCIAL, BH MENSAL(mm);EVAPOTRANSPIRACAO REAL, BH MENSAL(mm);INSOLACAO TOTAL, MENSAL(h);NEBULOSIDADE, MEDIA MENSAL(décimos);NUMERO DE DIAS COM PRECIP. PLUV, MENSAL(número);PRECIPITACAO TOTAL, MENSAL(mm);PRESSAO ATMOSFERICA AO NIVEL DO MAR, MEDIA MENSAL(mB);PRESSAO ATMOSFERICA, MEDIA MENSAL(mB);TEMPERATURA MAXIMA MEDIA, MENSAL(°C);TEMPERATURA MEDIA COMPENSADA, MENSAL(°C);TEMPERATURA MINIMA MEDIA, MENSAL(°C);UMIDADE RELATIVA DO AR, MEDIA MENSAL(%);VENTO, VELOCIDADE MAXIMA MENSAL(m/s);VENTO, VELOCIDADE MEDIA MENSAL(m/s);VISIBILIDADE, MEDIA MENSAL(codigo);
+2025-01-31;null;null;null;null;null;6.8;11;null;1012.5;992.4;null;null;24.5;null;null;null;96.8;
+2025-02-28;null;null;null;null;null;null;11;null;1014.3;993.9;34.2;27.4;23.8;75;null;null;95.7;
+2025-03-31;null;null;null;null;null;5.8;12;160.6;1014.9;994.6;34.3;27.8;23.7;75.1;null;null;95.9;
+2025-04-30;null;null;null;null;128.6;6.1;16;370.8;1014.6;994.3;32.3;26.8;23.7;78.9;null;null;95.4;
+2025-05-31;null;null;null;null;166.2;4.4;4;22.6;1017.1;996.8;32.7;25.9;21.7;73.9;null;null;95.7;
+2025-06-30;null;null;null;null;122.1;3.7;1;44.5;1018.3;997.6;32.1;24.7;19.9;72.2;null;null;95.8;
+2025-07-31;null;null;null;null;178.2;1.4;0;0;1020;999.3;32.7;23.1;16.4;63.1;null;null;95.8;
+2025-08-31;null;null;null;null;190.5;1.8;2;3.7;1017.6;997.1;34.4;25.3;18.1;51.9;null;null;95.8;
+2025-09-30;null;null;null;null;194.6;3.5;2;3.6;1014.3;994.7;37.2;29.9;23.8;52.2;null;null;95.8;
+2025-10-31;null;null;null;null;null;4.5;3;null;1013.8;993.8;36.5;29.9;24.3;54.9;null;null;93.9;
+2025-11-30;null;null;null;null;null;6.1;9;98;1012.7;992.6;36.2;28.9;24.3;64;null;null;95.8;
+2025-12-31;null;null;null;null;null;7.4;20;248.5;1011.7;992.1;33.6;27.8;24.5;74.5;null;null;95.9;
+

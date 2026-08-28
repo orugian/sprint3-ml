@@ -1,0 +1,19 @@
+Nome: PARANAIBA
+Codigo Estacao: 83565
+Latitude: -19.66361111
+Longitude: -51.19138888
+Altitude: 429.62
+Situacao: Fechada
+Data Inicial: 2025-01-01
+Data Final: 2025-07-01
+Periodicidade da Medicao: Mensal
+
+Data Medicao;DIRECAO PREDOMINANTE DO VENTO, MENSAL(° (gr));EVAPORACAO DO PICHE, MENSAL(mm);EVAPOTRANSPIRACAO POTENCIAL, BH MENSAL(mm);EVAPOTRANSPIRACAO REAL, BH MENSAL(mm);INSOLACAO TOTAL, MENSAL(h);NEBULOSIDADE, MEDIA MENSAL(décimos);NUMERO DE DIAS COM PRECIP. PLUV, MENSAL(número);PRECIPITACAO TOTAL, MENSAL(mm);PRESSAO ATMOSFERICA AO NIVEL DO MAR, MEDIA MENSAL(mB);PRESSAO ATMOSFERICA, MEDIA MENSAL(mB);TEMPERATURA MAXIMA MEDIA, MENSAL(°C);TEMPERATURA MEDIA COMPENSADA, MENSAL(°C);TEMPERATURA MINIMA MEDIA, MENSAL(°C);UMIDADE RELATIVA DO AR, MEDIA MENSAL(%);VENTO, VELOCIDADE MAXIMA MENSAL(m/s);VENTO, VELOCIDADE MEDIA MENSAL(m/s);VISIBILIDADE, MEDIA MENSAL(codigo);
+2025-01-31;0;null;null;null;null;7.3;12;null;1008.1;962.3;33.3;27.4;21.8;null;3;.7;35;
+2025-02-28;0;null;null;null;null;8.7;10;null;null;964.7;32.5;26.7;21.3;null;2;.6;34.8;
+2025-03-31;0;null;null;null;null;6.4;7;null;null;965.3;33.6;null;null;null;3;.7;35;
+2025-04-30;0;null;null;null;null;7.2;11;101;null;964.8;31.3;25.7;20.7;null;2.1;.7;35;
+2025-05-31;5;null;null;null;null;3;3;null;1015.2;968.4;29.6;23.3;16;null;2;.8;34.4;
+2025-06-30;0;null;null;null;null;4.5;6;null;null;969.2;28.3;21.1;13.2;null;3;.5;35.6;
+2025-07-31;null;null;null;null;null;null;null;null;null;null;null;null;null;null;null;null;null;
+

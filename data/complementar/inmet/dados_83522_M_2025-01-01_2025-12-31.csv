@@ -1,0 +1,24 @@
+Nome: IPAMERI
+Codigo Estacao: 83522
+Latitude: -17.72444443
+Longitude: -48.17194443
+Altitude: 778.14
+Situacao: Fechada
+Data Inicial: 2025-01-01
+Data Final: 2025-12-31
+Periodicidade da Medicao: Mensal
+
+Data Medicao;DIRECAO PREDOMINANTE DO VENTO, MENSAL(° (gr));EVAPORACAO DO PICHE, MENSAL(mm);EVAPOTRANSPIRACAO POTENCIAL, BH MENSAL(mm);EVAPOTRANSPIRACAO REAL, BH MENSAL(mm);INSOLACAO TOTAL, MENSAL(h);NEBULOSIDADE, MEDIA MENSAL(décimos);NUMERO DE DIAS COM PRECIP. PLUV, MENSAL(número);PRECIPITACAO TOTAL, MENSAL(mm);PRESSAO ATMOSFERICA, MEDIA MENSAL(mB);TEMPERATURA MAXIMA MEDIA, MENSAL(°C);TEMPERATURA MEDIA COMPENSADA, MENSAL(°C);TEMPERATURA MINIMA MEDIA, MENSAL(°C);UMIDADE RELATIVA DO AR, MEDIA MENSAL(%);VENTO, VELOCIDADE MAXIMA MENSAL(m/s);VENTO, VELOCIDADE MEDIA MENSAL(m/s);VISIBILIDADE, MEDIA MENSAL(codigo);
+2025-01-31;0;null;null;null;null;5.8;18;134.9;925.2;30.1;24.6;20.9;83.8;2.1;.7;97.5;null;
+2025-02-28;0;null;null;null;null;4.3;12;107.1;926.6;31.4;25;20.2;74;2.1;.8;97.5;null;
+2025-03-31;9;null;null;null;null;3.9;8;58.7;927.4;31.9;25.5;20.5;70.3;3.1;.9;97.5;null;
+2025-04-30;0;null;null;null;null;3.9;11;98.7;926.9;30.5;24.4;20.2;79.4;2.1;.6;97.5;null;
+2025-05-31;0;null;null;null;null;1.8;null;0;930.4;28.3;21.5;15.8;71.6;3.1;.7;97.5;null;
+2025-06-30;0;null;null;null;null;2.2;2;4;930.8;28.6;20.7;14.7;69.8;3.1;.8;97.5;null;
+2025-07-31;0;null;null;null;null;1.6;1;.4;932.1;28.6;19.9;12.2;63.9;3.1;.5;97.5;null;
+2025-08-31;0;null;null;null;null;1.5;1;2.1;930.6;30.7;22.1;14.4;51;3.1;.9;97.5;null;
+2025-09-30;9;null;null;null;null;1.5;4;87.2;929.4;33.1;25;18.3;49.4;3.1;1.1;97.5;null;
+2025-10-31;9;null;null;null;null;3.7;4;32.8;927.7;32;25.3;20.3;58.2;3.1;1.1;97.5;null;
+2025-11-30;null;null;null;null;null;null;9;null;925.8;32.3;25.4;20.3;71.5;2.1;.9;97.5;null;
+2025-12-31;0;null;null;null;null;5.3;14;192.9;925;30.5;25;20.8;75.9;2.1;.8;97.5;null;
+

@@ -1,0 +1,14 @@
+# Dados brutos (297 MB) - reproduzir com: python scripts/prepare_data.py
+data/raw/
+
+# Python
+__pycache__/
+*.py[cod]
+.venv/
+venv/
+.ipynb_checkpoints/
+
+# SO
+Thumbs.db
+.DS_Store
+desktop.ini

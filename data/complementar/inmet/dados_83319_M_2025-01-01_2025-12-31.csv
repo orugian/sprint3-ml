@@ -1,0 +1,24 @@
+Nome: NOVA XAV.(XAVANTINA)
+Codigo Estacao: 83319
+Latitude: -14.69805555
+Longitude: -52.35027777
+Altitude: 305.33
+Situacao: Fechada
+Data Inicial: 2025-01-01
+Data Final: 2025-12-31
+Periodicidade da Medicao: Mensal
+
+Data Medicao;DIRECAO PREDOMINANTE DO VENTO, MENSAL(° (gr));EVAPORACAO DO PICHE, MENSAL(mm);EVAPOTRANSPIRACAO POTENCIAL, BH MENSAL(mm);EVAPOTRANSPIRACAO REAL, BH MENSAL(mm);INSOLACAO TOTAL, MENSAL(h);NEBULOSIDADE, MEDIA MENSAL(décimos);NUMERO DE DIAS COM PRECIP. PLUV, MENSAL(número);PRECIPITACAO TOTAL, MENSAL(mm);PRESSAO ATMOSFERICA, MEDIA MENSAL(mB);TEMPERATURA MAXIMA MEDIA, MENSAL(°C);TEMPERATURA MEDIA COMPENSADA, MENSAL(°C);TEMPERATURA MINIMA MEDIA, MENSAL(°C);UMIDADE RELATIVA DO AR, MEDIA MENSAL(%);VENTO, VELOCIDADE MAXIMA MENSAL(m/s);VENTO, VELOCIDADE MEDIA MENSAL(m/s);VISIBILIDADE, MEDIA MENSAL(codigo);
+2025-01-31;null;null;null;null;null;8.4;17;null;976.7;null;null;22.6;null;3.1;.4;96.7;null;
+2025-02-28;null;null;null;null;null;null;9;null;978.1;null;null;22.2;null;2.1;.1;96.8;null;
+2025-03-31;0;null;null;null;null;6.8;5;49.5;977.7;null;null;22.4;83;3.1;.2;95.2;null;
+2025-04-30;0;null;null;null;183;6.5;14;103.9;977.1;null;null;22.4;85.4;4.1;.2;95.2;null;
+2025-05-31;0;null;null;null;239.4;3.7;2;20.9;980.1;null;null;18.8;82.5;3.1;.3;95.2;null;
+2025-06-30;0;null;null;null;215.8;3.2;2;12.9;980.7;null;null;16.4;78.6;3.1;.3;95.4;null;
+2025-07-31;0;null;null;null;237.9;1.5;0;0;982.2;null;null;13.6;73;3.6;.4;95.3;null;
+2025-08-31;0;null;null;null;283.3;2.9;null;0;979.9;null;null;15;63.9;4.6;.5;94.8;null;
+2025-09-30;null;null;null;null;null;null;1;null;979.3;null;null;17.6;null;3.1;.6;95.7;null;
+2025-10-31;null;null;null;null;null;null;5;null;977.9;null;null;19.5;null;3.1;.4;96.4;null;
+2025-11-30;null;null;null;null;null;null;7;null;977.4;null;null;20.5;null;3.1;.2;97;null;
+2025-12-31;null;null;null;null;null;null;10;null;976.7;null;null;21.4;null;3.1;.2;96.9;null;
+

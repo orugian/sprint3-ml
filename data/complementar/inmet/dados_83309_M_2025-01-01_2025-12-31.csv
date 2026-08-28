@@ -1,0 +1,24 @@
+Nome: DIAMANTINO
+Codigo Estacao: 83309
+Latitude: -14.40611111
+Longitude: -56.44694444
+Altitude: 274.02
+Situacao: Fechada
+Data Inicial: 2025-01-01
+Data Final: 2025-12-31
+Periodicidade da Medicao: Mensal
+
+Data Medicao;DIRECAO PREDOMINANTE DO VENTO, MENSAL(° (gr));EVAPORACAO DO PICHE, MENSAL(mm);EVAPOTRANSPIRACAO POTENCIAL, BH MENSAL(mm);EVAPOTRANSPIRACAO REAL, BH MENSAL(mm);INSOLACAO TOTAL, MENSAL(h);NEBULOSIDADE, MEDIA MENSAL(décimos);NUMERO DE DIAS COM PRECIP. PLUV, MENSAL(número);PRECIPITACAO TOTAL, MENSAL(mm);PRESSAO ATMOSFERICA AO NIVEL DO MAR, MEDIA MENSAL(mB);PRESSAO ATMOSFERICA, MEDIA MENSAL(mB);TEMPERATURA MAXIMA MEDIA, MENSAL(°C);TEMPERATURA MEDIA COMPENSADA, MENSAL(°C);TEMPERATURA MINIMA MEDIA, MENSAL(°C);UMIDADE RELATIVA DO AR, MEDIA MENSAL(%);VENTO, VELOCIDADE MAXIMA MENSAL(m/s);VENTO, VELOCIDADE MEDIA MENSAL(m/s);VISIBILIDADE, MEDIA MENSAL(codigo);
+2025-01-31;null;null;null;null;null;7.8;6;null;null;null;null;null;23.2;null;null;null;94.8;
+2025-02-28;null;null;null;null;null;null;15;null;null;null;null;null;22.5;null;null;null;95.1;
+2025-03-31;0;null;null;null;null;6.8;11;197.1;null;null;34.1;26.3;22.8;87.7;0;0;94.1;
+2025-04-30;0;null;null;null;null;6.5;15;254.8;null;null;32.5;26.3;22.9;89;3.1;.1;94.1;
+2025-05-31;0;null;null;null;null;3.9;2;47.2;null;null;32.5;24.8;20.5;83.7;2.6;0;94.1;
+2025-06-30;0;null;null;null;null;4.1;1;38.9;null;null;32.7;23.9;19;82.5;0;0;94.3;
+2025-07-31;0;null;null;null;null;2.1;0;0;null;null;32.8;22;15.5;78.1;0;0;94.1;
+2025-08-31;0;null;null;null;null;3.3;0;0;null;null;34.8;24.7;17.8;71.3;0;0;94.1;
+2025-09-30;0;null;null;null;null;4.6;4;11.7;null;null;37.8;28.3;22.2;69.9;0;0;94.1;
+2025-10-31;0;null;null;null;null;5.3;6;175.2;null;null;36.3;28.1;23;75.4;0;0;94.2;
+2025-11-30;0;null;null;null;null;7.3;9;102.1;null;null;34.2;27.2;23;84.4;0;0;94.2;
+2025-12-31;0;null;null;null;null;7.3;19;337.1;null;null;32.9;26.7;23.2;86.5;0;0;94.3;
+

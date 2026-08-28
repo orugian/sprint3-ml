@@ -1,0 +1,24 @@
+Nome: CANARANA
+Codigo Estacao: 83270
+Latitude: -13.47083332
+Longitude: -52.2711111
+Altitude: 430
+Situacao: Fechada
+Data Inicial: 2025-01-01
+Data Final: 2025-12-31
+Periodicidade da Medicao: Mensal
+
+Data Medicao;DIRECAO PREDOMINANTE DO VENTO, MENSAL(° (gr));EVAPORACAO DO PICHE, MENSAL(mm);EVAPOTRANSPIRACAO POTENCIAL, BH MENSAL(mm);EVAPOTRANSPIRACAO REAL, BH MENSAL(mm);INSOLACAO TOTAL, MENSAL(h);NEBULOSIDADE, MEDIA MENSAL(décimos);NUMERO DE DIAS COM PRECIP. PLUV, MENSAL(número);PRECIPITACAO TOTAL, MENSAL(mm);PRESSAO ATMOSFERICA, MEDIA MENSAL(mB);TEMPERATURA MAXIMA MEDIA, MENSAL(°C);TEMPERATURA MEDIA COMPENSADA, MENSAL(°C);TEMPERATURA MINIMA MEDIA, MENSAL(°C);UMIDADE RELATIVA DO AR, MEDIA MENSAL(%);VENTO, VELOCIDADE MAXIMA MENSAL(m/s);VENTO, VELOCIDADE MEDIA MENSAL(m/s);VISIBILIDADE, MEDIA MENSAL(codigo);
+2025-01-31;null;null;null;null;null;null;14;null;966.1;null;null;21.7;null;null;null;97.2;null;
+2025-02-28;null;null;null;null;null;null;11;null;965.6;null;null;21.8;null;null;null;97.4;null;
+2025-03-31;null;null;null;null;null;null;7;null;965.9;null;null;22.1;null;null;null;97.6;null;
+2025-04-30;null;null;null;null;null;null;7;null;966.5;null;null;21.7;null;null;null;97.6;null;
+2025-05-31;null;null;null;null;null;null;1;null;965.8;null;null;21.3;null;null;null;98;null;
+2025-06-30;null;null;null;null;null;null;2;null;967.1;null;null;19.6;null;null;null;97.9;null;
+2025-07-31;0;null;null;null;null;3;null;null;970;null;null;17.4;null;2.6;.3;98.2;null;
+2025-08-31;null;null;null;null;null;null;null;null;null;null;null;18.6;null;2.1;.1;98;null;
+2025-09-30;null;null;null;null;null;null;2;null;null;null;null;21.9;null;0;0;97.7;null;
+2025-10-31;null;null;null;null;null;null;7;null;null;null;null;22;null;0;0;97.2;null;
+2025-11-30;null;null;null;null;null;null;10;null;null;null;null;22.6;null;0;0;97.6;null;
+2025-12-31;null;null;null;null;null;null;13;null;null;null;null;22;null;0;0;97.4;null;
+

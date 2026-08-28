@@ -1,0 +1,60 @@
+{
+  "projeto": "SOMPO 2026 - Sprint 3 - Modelagem de ML",
+  "base": "PSR 2016-2024 (SISSER/MAPA) - recorte Sompo Seguros S/A",
+  "periodo": "2019-2024",
+  "n_apolices": 18872,
+  "classificacao": {
+    "modelo": "Random Forest",
+    "target": "TEVE_SINISTRO",
+    "hiperparametros": {
+      "clf__max_depth": "20",
+      "clf__max_features": "0.5",
+      "clf__min_samples_leaf": "1",
+      "clf__n_estimators": "400"
+    },
+    "auc_roc": 0.8900392340322942,
+    "f1": 0.7062344139650872,
+    "accuracy": 0.8439735099337748,
+    "precision": 0.7094188376753507,
+    "recall": 0.7030784508440914
+  },
+  "regressao": {
+    "modelo": "Random Forest",
+    "target": "VL_INDENIZACAO",
+    "mae": 44072.20921101228,
+    "rmse": 91675.53278632462,
+    "r2": 0.3668990860994755
+  },
+  "features_numericas": [
+    "NR_AREA_TOTAL",
+    "LOG_AREA",
+    "NR_PRODUTIVIDADE_ESTIMADA",
+    "NR_PRODUTIVIDADE_SEGURADA",
+    "GAP_PRODUTIVIDADE",
+    "VL_LIMITE_GARANTIA",
+    "LOG_LIMITE",
+    "VL_LIMITE_POR_HA",
+    "VL_PREMIO_LIQUIDO",
+    "PE_TAXA",
+    "PE_TAXA_EFETIVA",
+    "VL_SUBVENCAO_FEDERAL",
+    "PE_SUBVENCAO",
+    "NivelDeCobertura",
+    "MES_INICIO",
+    "MES_FIM",
+    "DURACAO_VIGENCIA_DIAS",
+    "DIAS_PROPOSTA_APOLICE",
+    "LAT_DECIMAL",
+    "LON_DECIMAL",
+    "FREQ_MUNICIPIO",
+    "DIST_ESTACAO_INMET_KM",
+    "CONAB_AREA_CANA_UF"
+  ],
+  "features_categoricas": [
+    "NM_CULTURA_GLOBAL",
+    "SG_UF_PROPRIEDADE",
+    "NM_CLASSIF_PRODUTO"
+  ],
+  "random_state": 42,
+  "sklearn_version": "1.9.0"
+}
