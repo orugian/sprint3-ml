@@ -93,9 +93,9 @@ o limiar de decisão otimizado (ambos usam 0,5). Parte da diferença de recall v
 | Modelo | MAE | RMSE | R² (holdout) | CV R² (treino) |
 |---|---|---|---|---|
 | Baseline (média) | R$ 61.397 | R$ 115.218 | −0,000 | −0,000 |
-| KNN | R$ 44.080 | R$ 95.389 | 0,315 | 0,422 ± 0,059 |
-| Gradient Boosting | R$ 46.256 | R$ 96.347 | 0,301 | 0,383 ± 0,045 |
-| **Random Forest** ← campeão | **R$ 43.608** | **R$ 91.138** | **0,374** | **0,434 ± 0,081** |
+| KNN | R$ 44.180 | R$ 95.726 | 0,310 | 0,422 ± 0,058 |
+| Gradient Boosting | R$ 46.289 | R$ 97.177 | 0,289 | 0,381 ± 0,052 |
+| **Random Forest** ← campeão | **R$ 43.802** | **R$ 91.291** | **0,372** | **0,433 ± 0,078** |
 
 O R² de um split único é instável num alvo de cauda pesada — o desvio da validação
 cruzada (±0,08) é a medida honesta dessa incerteza, e o valor pontual do holdout não
@@ -151,7 +151,7 @@ prever a safra seguinte (2024). O resultado é revelador:
 - **Dentro de cada safra**, o modelo ordena risco muito bem — AUC alto e estável
   nas seis safras (média 0,859).
 - **Entre safras**, a performance cai drasticamente, retendo apenas sinal residual:
-  **Random Forest 0,604 · Gradient Boosting 0,584 · KNN 0,563**, contra 0,892 / 0,879
+  **Gradient Boosting 0,615 · Random Forest 0,597 · KNN 0,564**, contra 0,879 / 0,892
   / 0,837 no holdout aleatório.
 
 A causa é que o **ranking de risco se inverte** entre anos. Milho 2ª safra foi a
@@ -168,19 +168,22 @@ A Seção 11.2 **decompõe essa queda** e mostra que ela não é artefato de amo
 | (b) …medindo só **dentro de cada safra** | 0,854 | −0,039 (efeito de coorte) |
 | (c) …com split por **segurado** | 0,882 | −0,010 (vazamento de grupo) |
 | (d) …por segurado **e** dentro da safra | 0,844 | −0,049 |
-| (e) **Out-of-time** (treino ≤2023 → 2024) | 0,604 | −0,288 |
+| (e) **Out-of-time** (treino ≤2023 → 2024) | 0,597 | −0,296 |
 
-Ou seja: **16,9% da queda vem do desenho amostral e 83,1% é falha genuína de
+Ou seja: **16,4% da queda vem do desenho amostral e 83,6% é falha genuína de
 transferência entre safras.** Descobrimos, medindo, que remover a coluna
 `ANO_APOLICE` **não remove o ano** — ele continua recuperável a 97,1% a partir das
 features mantidas (e a 95,5% mesmo descartando todas as variáveis de calendário).
 A afirmação honesta é "reduzimos o efeito de coorte e o quantificamos", não
 "eliminamos o ano".
 
-A ordem entre os três modelos, porém, **se mantém** nos dois protocolos: o campeão
-eleito pela validação cruzada continua sendo o melhor também fora da amostra. O que
-a validação temporal derruba é a expectativa de performance, não a escolha do
-algoritmo.
+A ordem entre os modelos **não é estável** entre protocolos: o Random Forest lidera
+com folga no holdout aleatório, mas fora da amostra os dois ensembles praticamente
+empatam, com leve vantagem para o Gradient Boosting. Não trocamos o campeão — a
+escolha segue o protocolo definido antes de olhar resultados (melhor AUC na validação
+cruzada) —, mas registramos que **uma única safra de teste não basta para eleger um
+vencedor out-of-time**. Quem levar o modelo a produção deve reavaliar sob protocolo
+temporal, idealmente com validação em várias safras.
 
 Isso converte a limitação herdada da Sprint 2 (dados climáticos do INMET com
 séries nulas) em **requisito técnico justificado por evidência** para a Sprint 4.

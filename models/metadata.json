@@ -21,9 +21,9 @@
   "regressao": {
     "modelo": "Random Forest",
     "target": "VL_INDENIZACAO",
-    "mae": 43607.95554197475,
-    "rmse": 91138.27548198489,
-    "r2": 0.374297819517317
+    "mae": 43801.90849542724,
+    "rmse": 91291.09750917766,
+    "r2": 0.3721976866244999
   },
   "features_numericas": [
     "NR_AREA_TOTAL",

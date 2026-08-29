@@ -414,8 +414,14 @@ conab_area['UF'] = conab_area['REGIAO_UF'].astype(str).str.strip().str.upper()
 
 safras = [c for c in conab_area.columns
           if c not in ('REGIAO_UF', 'UF') and not str(c).startswith('Unnamed')]
-ultima_safra = safras[-1]
-print(f"\nCONAB: {len(safras)} safras detectadas ({safras[0]} a {ultima_safra})")
+# A planilha marca projecoes no proprio rotulo (ex.: '2026/27 (1)', estimativa de
+# abril/2026). Usamos a ultima safra REALIZADA: um proxy regional baseado em
+# projecao seria menos defensavel do que um baseado em area efetivamente colhida.
+realizadas = [c for c in safras if '(' not in str(c)]
+ultima_safra = realizadas[-1]
+print(f"\nCONAB: {len(safras)} safras detectadas ({safras[0]} a {safras[-1]})")
+print(f"       usando a ultima REALIZADA: {ultima_safra} "
+      f"({len(safras)-len(realizadas)} descartada(s) por serem estimativa)")
 
 serie_uf = conab_area.drop_duplicates('UF').set_index('UF')[ultima_safra]
 conab_map = {uf: pd.to_numeric(serie_uf.loc[uf], errors='coerce')
@@ -451,13 +457,20 @@ def dms_para_decimal(grau, minuto, segundo, hemisferio_negativo=True):
 
 
 # --- Geograficas
-# O grau NUNCA falta; o que falta sao minutos (225 linhas) e segundos (264).
-# Tratar a coordenada inteira como nula descartaria o grau e mandaria a apolice
-# para a mediana nacional na imputacao. Preenchemos so o componente ausente com
-# zero: a perda maxima de precisao e de 1 grau (~110 km), muito melhor do que
-# perder a localizacao por completo.
-for _c in ['NR_MIN_LAT', 'NR_SEG_LAT', 'NR_MIN_LONG', 'NR_SEG_LONG']:
+# O grau NUNCA falta; o que pode faltar sao minutos e segundos. Tratar a coordenada
+# inteira como nula descartaria o grau e mandaria a apolice para a mediana nacional
+# na imputacao. Preenchemos so o componente ausente com zero: faltando o minuto o
+# erro maximo e de ~110 km; faltando so o segundo, de ~2 km. Em ambos os casos e
+# muito melhor do que perder a localizacao por completo.
+_comp = ['NR_MIN_LAT', 'NR_SEG_LAT', 'NR_MIN_LONG', 'NR_SEG_LONG']
+_tocadas = int(df[_comp].isna().any(axis=1).sum())
+_sem_min = int(df[['NR_MIN_LAT', 'NR_MIN_LONG']].isna().any(axis=1).sum())
+for _c in _comp:
     df[_c] = df[_c].fillna(0)
+print(f"[SANEAMENTO] componentes DMS ausentes preenchidos com zero em {_tocadas} "
+      f"apolices ({_tocadas/len(df)*100:.1f}%):")
+print(f"             {_sem_min} sem o MINUTO (erro ate ~110 km) e "
+      f"{_tocadas-_sem_min} apenas sem o SEGUNDO (erro ate ~2 km)")
 df['LAT_DECIMAL'] = dms_para_decimal(df['NR_GRAU_LAT'], df['NR_MIN_LAT'], df['NR_SEG_LAT'])
 df['LON_DECIMAL'] = dms_para_decimal(df['NR_GRAU_LONG'], df['NR_MIN_LONG'], df['NR_SEG_LONG'])
 
@@ -781,8 +794,14 @@ X_train = X_train.assign(FREQ_MUNICIPIO=df.loc[X_train.index, 'NM_MUNICIPIO_PROP
                                           .map(_freq_treino).fillna(0.0))
 X_test = X_test.assign(FREQ_MUNICIPIO=df.loc[X_test.index, 'NM_MUNICIPIO_PROPRIEDADE']
                                         .map(_freq_treino).fillna(0.0))
+# IMPORTANTE: propagamos a definicao de volta para X. Sem isso conviveriam duas
+# versoes da mesma feature - a do treino em X_train/X_test e a antiga (ajustada na
+# base inteira) em tudo que fatia X depois daqui: a regressao da Secao 9, o split
+# temporal da Secao 11 e a analise intra-safra. A partir deste ponto ha UMA definicao.
+X = X.assign(FREQ_MUNICIPIO=pd.concat([X_train['FREQ_MUNICIPIO'],
+                                       X_test['FREQ_MUNICIPIO']]).reindex(X.index))
 _novos = int((X_test['FREQ_MUNICIPIO'] == 0).sum())
-print(f"FREQ_MUNICIPIO reajustado so no treino "
+print(f"FREQ_MUNICIPIO reajustado so no treino e propagado para X "
       f"({_novos} apolices de teste em municipios ausentes do treino -> 0)\n")
 
 print("HOLDOUT ESTRATIFICADO 80/20")
@@ -1230,7 +1249,9 @@ plt.show()
 
 # %%
 df_sev = df[df['TEVE_SINISTRO'] == 1].copy()
-X_sev = df_sev[FEATURES].copy()
+# Fatiamos X (e nao df[FEATURES]) para herdar o FREQ_MUNICIPIO ajustado no treino
+# da Secao 5.3 - assim classificacao e regressao usam a MESMA definicao da feature.
+X_sev = X.loc[df_sev.index].copy()
 y_sev = df_sev['VL_INDENIZACAO'].copy()
 
 Xs_train, Xs_test, ys_train, ys_test = train_test_split(
@@ -1842,10 +1863,12 @@ _gap = _auc_hold - _auc_oot
 _artefato = _auc_hold - _auc_limpo
 print(f"\nQueda total ate o out-of-time      : {_gap:.4f}")
 print(f"  atribuivel a desenho amostral    : {_artefato:.4f} ({_artefato/_gap*100:.1f}%)")
-print(f"    - efeito de coorte (safra)     : {_auc_hold-_auc_intra:.4f}")
-print(f"    - vazamento de grupo (segurado): {_auc_hold-_auc_grupo:.4f}")
 print(f"  falha real de transferencia      : {_auc_limpo-_auc_oot:.4f} "
       f"({(_auc_limpo-_auc_oot)/_gap*100:.1f}%)")
+print("\nEfeitos MARGINAIS (cada um medido isoladamente). Eles NAO somam ao total")
+print("acima: sobrepoem-se parcialmente, e a interacao ja esta no valor agregado.")
+print(f"  - efeito de coorte (safra)       : {_auc_hold-_auc_intra:.4f}")
+print(f"  - vazamento de grupo (segurado)  : {_auc_hold-_auc_grupo:.4f}")
 
 # %% [markdown]
 # ### 11.3 O achado
@@ -1868,12 +1891,19 @@ print(f"  falha real de transferencia      : {_auc_limpo-_auc_oot:.4f} "
 # acima do out-of-time. A falha de transferencia entre safras e **real**, e nao um
 # efeito de amostragem.
 #
-# **Um detalhe que merece registro: a ordem dos modelos se mantem.** A celula acima
-# compara explicitamente o ranking nos dois protocolos. O nivel absoluto de
-# performance desaba, mas a **ordenacao relativa entre os tres modelos e estavel** -
-# o campeao eleito pela validacao cruzada continua sendo o melhor tambem na previsao
-# da safra seguinte. Isso reforca a escolha do modelo: o que a validacao temporal
-# derruba e a expectativa de performance, nao a decisao de qual algoritmo usar.
+# **Um detalhe que merece registro: a ordem dos modelos nao e estavel entre
+# protocolos.** A celula acima compara os dois rankings. O Random Forest lidera com
+# folga no holdout aleatorio, mas fora da amostra os dois ensembles praticamente
+# empatam, com vantagem para o Gradient Boosting - que tambem sofre a menor queda.
+#
+# Nao trocamos o campeao: a escolha segue o protocolo definido **antes** de olhar
+# qualquer resultado (melhor AUC na validacao cruzada do treino). Mas registramos a
+# fragilidade: a diferenca entre os dois ensembles fora da amostra e pequena e se
+# mostrou sensivel a mudancas minimas no pre-processamento durante o desenvolvimento -
+# ou seja, **nao ha evidencia suficiente para eleger um vencedor out-of-time** com
+# uma unica safra de teste. Quem levar o modelo a producao deve reavaliar sob
+# protocolo temporal, idealmente com validacao em varias safras (leave-one-year-out),
+# e nao assumir que o campeao do holdout aleatorio se mantem.
 #
 # **Conclusao tecnica.** Os atributos da apolice (cultura, area, valores, geografia)
 # explicam bem o risco **relativo** dentro de um mesmo contexto climatico, mas nao
@@ -2090,7 +2120,7 @@ TUNING
 
 ROBUSTEZ
   AUC intra-safra medio        : {df_intra['auc'].mean():.4f}
-  AUC prevendo a safra seguinte: {df_temp['auc_temporal_2024'].max():.4f}
+  AUC do campeao prevendo 2024 : {df_temp.loc[melhor_final, 'auc_temporal_2024']:.4f}
 """)
 print("=" * 78)
 
