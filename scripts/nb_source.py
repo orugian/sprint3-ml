@@ -64,7 +64,7 @@
 # |---|---|---|
 # | 1 | **Preparacao dos dados**: scaling e encoding (OHE) | Secoes 4 e 5 |
 # | 2 | **Treinamento**: pelo menos 2 modelos | Secao 6 (3 modelos + baseline) |
-# | 3 | **Validacao**: holdout (obrigatorio) | Secao 5.4 |
+# | 3 | **Validacao**: holdout (obrigatorio) | Secao 5.3 |
 # | 3 | **Metricas de classificacao**: accuracy, precision, recall, f1, AUC | Secao 7 |
 # | 3 | **Metricas de regressao**: MAE, RMSE, R2 | Secao 9 |
 # | 4 | **Tuning basico**: ajuste de hiperparametros (ex: k no KNN) | Secao 8 |
@@ -251,14 +251,19 @@ ibge = pd.DataFrame(iter(DBF('data/complementar/ibge_rur_muni.DBF', load=True)))
 print(f"IBGE RUR_MUNI  : {ibge.shape[0]:,} municipios | UFs: {ibge['UF'].nunique()}")
 
 # --- CONAB ---
+# header=5: as 5 primeiras linhas da planilha sao titulo e subtitulo; a linha 5
+# (base 0) e que traz 'REGIÃO/UF' e os rotulos de safra. Com header=4 os rotulos
+# viram 'Unnamed: N' e a serie fica inacessivel - ver nota na Secao 4.3.
 SHEET_AREA = 'Área'
-conab_area = pd.read_excel('data/complementar/conab_cana_serie_historica.xls',
-                           sheet_name=SHEET_AREA, header=4)
-conab_prod = pd.read_excel('data/complementar/conab_cana_serie_historica.xls',
-                           sheet_name='Produtividade', header=4)
+CONAB_PATH = 'data/complementar/conab_cana_serie_historica.xls'
+conab_area = pd.read_excel(CONAB_PATH, sheet_name=SHEET_AREA, header=5)
+conab_prod = pd.read_excel(CONAB_PATH, sheet_name='Produtividade', header=5)
 for _d in (conab_area, conab_prod):
     _d.rename(columns={_d.columns[0]: 'REGIAO_UF'}, inplace=True)
-print(f"CONAB cana     : {conab_area.shape[0]} regioes x {conab_area.shape[1]-1} safras")
+_n_safras = len([c for c in conab_area.columns
+                 if c != 'REGIAO_UF' and not str(c).startswith('Unnamed')])
+print(f"CONAB cana     : {conab_area.shape[0]} regioes x {_n_safras} safras "
+      f"(primeira: {[c for c in conab_area.columns if c != 'REGIAO_UF'][0]})")
 
 # --- INMET ---
 inmet_dir = 'data/complementar/inmet'
@@ -376,31 +381,51 @@ print("[SANITY CHECK] OK - os dois targets sao mutuamente coerentes.")
 # Repetimos os joins validados na Sprint 2, agora sobre a base historica.
 
 # %%
-# --- Join PSR x IBGE: o CD_GEOCMU tem 7 digitos; o RUR_MUNI usa os 5 primeiros
-df['CD_MUNIC_5'] = df['CD_GEOCMU'].astype(str).str[:5]
-ibge_join = ibge.rename(columns={'CODIGO': 'CD_MUNIC_5',
-                                 'MUNIC': 'NM_MUNICIPIO_IBGE',
-                                 'UF': 'UF_IBGE'})[['CD_MUNIC_5', 'NM_MUNICIPIO_IBGE', 'UF_IBGE']]
-df = df.merge(ibge_join.drop_duplicates('CD_MUNIC_5'), on='CD_MUNIC_5', how='left')
+# --- Join PSR x IBGE, por (municipio normalizado, UF) ---------------------------
+# NOTA METODOLOGICA: a Sprint 2 casava CD_GEOCMU[:5] contra ibge['CODIGO'].
+# Auditando esse join, constatamos que o CODIGO do RUR_MUNI NAO e o prefixo do
+# geocodigo de 7 digitos - e um codigo sequencial proprio do arquivo
+# (ex: '01054' = JARINU/SP, '01009' = SANTA CRUZ/RN). O join por prefixo casava
+# apenas 8,9% das apolices, e por coincidencia numerica, nao por identidade.
+# Trocamos pela chave (nome do municipio normalizado + UF), que e semanticamente
+# correta.
+ibge_cat = ibge.copy()
+ibge_cat['CHAVE_MUNI'] = (ibge_cat['MUNIC'].apply(normalize_str) + '|'
+                          + ibge_cat['UF'].apply(normalize_str))
+df['CHAVE_MUNI'] = (df['NM_MUNICIPIO_PROPRIEDADE'].apply(normalize_str) + '|'
+                    + df['SG_UF_PROPRIEDADE'].apply(normalize_str))
+df = df.merge(
+    ibge_cat.drop_duplicates('CHAVE_MUNI')[['CHAVE_MUNI', 'MUNIC', 'UF']]
+            .rename(columns={'MUNIC': 'NM_MUNICIPIO_IBGE', 'UF': 'UF_IBGE'}),
+    on='CHAVE_MUNI', how='left')
 match_ibge = int(df['NM_MUNICIPIO_IBGE'].notna().sum())
 print(f"Join PSR x IBGE : {match_ibge:,}/{len(df):,} apolices ({match_ibge/len(df)*100:.1f}%)")
+n_mun = df['CHAVE_MUNI'].nunique()
+n_mun_ok = df.loc[df['NM_MUNICIPIO_IBGE'].notna(), 'CHAVE_MUNI'].nunique()
+print(f"                  {n_mun_ok}/{n_mun} municipios distintos ({n_mun_ok/n_mun*100:.1f}%)")
+print("                  nao casados = variantes de grafia (ex: IPAUSSU/IPAUCU)")
 
-# --- Join PSR x CONAB: perfil agricola regional (proxy de infraestrutura/clima)
-UF_TO_CONAB = {'SP': 'SÃO PAULO', 'PR': 'PARANÁ', 'MG': 'MINAS GERAIS',
-               'GO': 'GOIÁS', 'MS': 'MATO GROSSO DO SUL', 'RS': 'RIO GRANDE DO SUL',
-               'SC': 'SANTA CATARINA', 'MT': 'MATO GROSSO', 'TO': 'TOCANTINS',
-               'DF': 'DISTRITO FEDERAL'}
-safras = [c for c in conab_area.columns if c != 'REGIAO_UF']
+# --- Join PSR x CONAB: perfil agricola regional (proxy de infraestrutura/clima) --
+# NOTA METODOLOGICA: o cabecalho real da planilha esta na LINHA 5 (header=5), nao
+# na 4. Com header=4 os rotulos de safra viram 'Unnamed: N' e a serie fica
+# inacessivel. Alem disso o arquivo identifica os estados por SIGLA ('SP', 'PR'),
+# nao por nome por extenso - o mapeamento UF -> nome usado na Sprint 2 nunca casava.
+conab_area['UF'] = conab_area['REGIAO_UF'].astype(str).str.strip().str.upper()
+
+safras = [c for c in conab_area.columns
+          if c not in ('REGIAO_UF', 'UF') and not str(c).startswith('Unnamed')]
 ultima_safra = safras[-1]
+print(f"\nCONAB: {len(safras)} safras detectadas ({safras[0]} a {ultima_safra})")
 
-conab_map = {}
-for uf, nome in UF_TO_CONAB.items():
-    linha = conab_area[conab_area['REGIAO_UF'].astype(str).str.strip().str.upper() == nome]
-    if len(linha):
-        conab_map[uf] = pd.to_numeric(linha[ultima_safra].iloc[0], errors='coerce')
+serie_uf = conab_area.drop_duplicates('UF').set_index('UF')[ultima_safra]
+conab_map = {uf: pd.to_numeric(serie_uf.loc[uf], errors='coerce')
+             for uf in df['SG_UF_PROPRIEDADE'].unique() if uf in serie_uf.index}
 df['CONAB_AREA_CANA_UF'] = df['SG_UF_PROPRIEDADE'].map(conab_map)
-print(f"Join PSR x CONAB: {int(df['CONAB_AREA_CANA_UF'].notna().sum()):,} apolices "
-      f"com perfil regional (safra {ultima_safra})")
+cob = int(df['CONAB_AREA_CANA_UF'].notna().sum())
+print(f"Join PSR x CONAB: {cob:,}/{len(df):,} apolices ({cob/len(df)*100:.1f}%) "
+      f"com perfil regional (safra {ultima_safra}, em mil ha)")
+print("                  UFs sem serie de cana ficam nulas (ex: RS) - "
+      "e imputado pela mediana no Pipeline")
 
 # --- Join PSR x INMET: estacao meteorologica mais proxima (distancia haversine)
 inmet_geo = inmet.copy()
@@ -426,6 +451,13 @@ def dms_para_decimal(grau, minuto, segundo, hemisferio_negativo=True):
 
 
 # --- Geograficas
+# O grau NUNCA falta; o que falta sao minutos (225 linhas) e segundos (264).
+# Tratar a coordenada inteira como nula descartaria o grau e mandaria a apolice
+# para a mediana nacional na imputacao. Preenchemos so o componente ausente com
+# zero: a perda maxima de precisao e de 1 grau (~110 km), muito melhor do que
+# perder a localizacao por completo.
+for _c in ['NR_MIN_LAT', 'NR_SEG_LAT', 'NR_MIN_LONG', 'NR_SEG_LONG']:
+    df[_c] = df[_c].fillna(0)
 df['LAT_DECIMAL'] = dms_para_decimal(df['NR_GRAU_LAT'], df['NR_MIN_LAT'], df['NR_SEG_LAT'])
 df['LON_DECIMAL'] = dms_para_decimal(df['NR_GRAU_LONG'], df['NR_MIN_LONG'], df['NR_SEG_LONG'])
 
@@ -434,6 +466,15 @@ df['MES_INICIO'] = df['DT_INICIO_VIGENCIA'].dt.month
 df['MES_FIM'] = df['DT_FIM_VIGENCIA'].dt.month
 df['DURACAO_VIGENCIA_DIAS'] = (df['DT_FIM_VIGENCIA'] - df['DT_INICIO_VIGENCIA']).dt.days
 df['DIAS_PROPOSTA_APOLICE'] = (df['DT_APOLICE'] - df['DT_PROPOSTA']).dt.days
+
+# Saneamento de outlier na fonte: 1 apolice traz DT_FIM_VIGENCIA = 09/05/5207
+# (erro de digitacao no dado do MAPA), gerando duracao de 1.164.030 dias. Como o
+# p99 e 334 dias e nenhuma apolice legitima passa de 366, tratamos acima de 400
+# como ausente e deixamos a imputacao pela mediana resolver.
+_absurdos = int((df['DURACAO_VIGENCIA_DIAS'] > 400).sum())
+df.loc[df['DURACAO_VIGENCIA_DIAS'] > 400, 'DURACAO_VIGENCIA_DIAS'] = np.nan
+print(f"[SANEAMENTO] duracoes de vigencia acima de 400 dias tratadas como ausentes: "
+      f"{_absurdos} apolice(s)")
 
 # --- Razoes economicas (intensidade de risco precificada pela seguradora)
 df['PE_TAXA_EFETIVA'] = df['VL_PREMIO_LIQUIDO'] / df['VL_LIMITE_GARANTIA']
@@ -489,7 +530,7 @@ auditoria = [
     ('EVENTO_PREPONDERANTE',      'EXCLUIR', 'E o proprio target A (define TEVE_SINISTRO)'),
     ('VALOR_INDENIZAÇÃO',         'EXCLUIR', 'E o proprio target B (severidade)'),
     ('NM_RAZAO_SOCIAL',           'EXCLUIR', 'Constante (todo o recorte e Sompo)'),
-    ('NR_ANIMAL',                 'EXCLUIR', 'Constante = 0 (nao ha seguro pecuario no recorte)'),
+    ('NR_ANIMAL',                 'EXCLUIR', '100% vazia no recorte (nao ha seguro pecuario)'),
     ('LATITUDE',                  'EXCLUIR', "Constante 'S'; ja codificada em LAT_DECIMAL"),
     ('LONGITUDE',                 'EXCLUIR', "Constante 'W'; ja codificada em LON_DECIMAL"),
     ('NR_DECIMAL_LATITUDE',       'EXCLUIR', "Vazia ('-') em toda a base"),
@@ -527,9 +568,11 @@ print(aud['decisao'].value_counts().to_string())
 # %% [markdown]
 # #### Nota metodologica: por que `ANO_APOLICE` fica de fora
 #
-# O ano e altamente preditivo nesta base - 2021 concentrou 71,4% de sinistros
-# por causa da seca e das geadas historicas daquela safra. Incluir o ano faria
-# o modelo aprender *"2021 foi ruim"*, o que:
+# O ano e altamente preditivo nesta base. Na safra 2021, **71,4% das apolices
+# tiveram sinistro** - contra 26,7% na media do periodo - por causa da seca e das
+# geadas historicas daquele ano; sozinha, essa safra responde por **40,7% de todos
+# os sinistros da base**. Incluir o ano faria o modelo aprender *"2021 foi ruim"*,
+# o que:
 #
 # 1. **infla artificialmente** as metricas no holdout aleatorio (o teste contem
 #    apolices de 2021, cujo ano o modelo ja viu no treino);
@@ -538,9 +581,15 @@ print(aud['decisao'].value_counts().to_string())
 # 3. **empobrece a interpretacao** exigida no item 5 do desafio: a resposta
 #    viraria "o ano", em vez de atributos acionaveis como cultura e regiao.
 #
-# Excluindo o ano, o modelo aprende risco **estrutural** (cultura, geografia,
-# perfil contratual). O efeito do choque climatico anual e medido separadamente
-# na Secao 11 (validacao temporal).
+# A pergunta obvia e: **a exclusao funciona de fato?** Nao basta remover a coluna se
+# outras variaveis reconstroem o ano. Essa verificacao exige a matriz de features ja
+# montada e um modelo treinado, entao ela e feita na **Secao 11.2**, junto com a
+# validacao temporal - e o resultado, adiantamos, **reprova a versao ingenua do nosso
+# proprio argumento**: o ano continua recuperavel a partir das features que mantivemos.
+#
+# Excluir `ANO_APOLICE` segue sendo a decisao certa - reduz o efeito e mantem a
+# interpretacao da Secao 10 focada em atributos acionaveis. Mas a afirmacao honesta e
+# *"reduzimos o efeito de coorte e o quantificamos"*, nao *"eliminamos o ano"*.
 
 # %% [markdown]
 # ### 4.6 EDA orientada a modelagem
@@ -671,6 +720,15 @@ print(X.isnull().sum().sort_values(ascending=False).head(5).to_string())
 # informacao do conjunto de teste - um **vazamento sutil** que infla as metricas.
 # Encapsulando pre-processamento e modelo num `Pipeline`, o `fit` do scaler
 # ocorre **apenas no treino**, inclusive dentro de cada fold da validacao cruzada.
+#
+# **Uma ressalva honesta sobre o frequency encoding.** O `FREQ_MUNICIPIO` nao cabe
+# dentro do `ColumnTransformer` (precisaria de um transformer com estado proprio),
+# entao ele e reajustado explicitamente sobre o treino na Secao 5.3, logo apos o
+# split. Municipios que aparecem so no teste recebem frequencia 0. Resta uma
+# aproximacao conhecida: dentro dos folds do `GridSearchCV`, o mapa de frequencias
+# e o do conjunto de treino inteiro, e nao o de cada fold. Como a variavel nao usa o
+# target e sua importancia medida e proxima de zero (Secao 10.2), o efeito e
+# desprezivel - mas registramos em vez de omitir.
 
 # %%
 def criar_preprocessador():
@@ -713,6 +771,20 @@ print(criar_preprocessador())
 X_train, X_test, y_train, y_test = train_test_split(
     X, y, test_size=TEST_SIZE, random_state=RANDOM_STATE, stratify=y)
 
+# FREQ_MUNICIPIO: reajustado APENAS com o treino.
+# Na Secao 4.4 a frequencia foi calculada sobre a base inteira, o que e comodo para
+# a EDA mas faz o encoding "enxergar" a composicao do teste. Nao e vazamento do
+# target (a frequencia nao usa y), mas contraria o principio da Secao 5.2. Aqui a
+# recalculamos so no treino; municipios que so aparecem no teste recebem 0.
+_freq_treino = df.loc[X_train.index, 'NM_MUNICIPIO_PROPRIEDADE'].value_counts(normalize=True)
+X_train = X_train.assign(FREQ_MUNICIPIO=df.loc[X_train.index, 'NM_MUNICIPIO_PROPRIEDADE']
+                                          .map(_freq_treino).fillna(0.0))
+X_test = X_test.assign(FREQ_MUNICIPIO=df.loc[X_test.index, 'NM_MUNICIPIO_PROPRIEDADE']
+                                        .map(_freq_treino).fillna(0.0))
+_novos = int((X_test['FREQ_MUNICIPIO'] == 0).sum())
+print(f"FREQ_MUNICIPIO reajustado so no treino "
+      f"({_novos} apolices de teste em municipios ausentes do treino -> 0)\n")
+
 print("HOLDOUT ESTRATIFICADO 80/20")
 print("=" * 60)
 print(f"  Treino : {X_train.shape[0]:,} apolices | {y_train.sum():,} sinistros "
@@ -725,9 +797,16 @@ print(f"\n  Diferenca de proporcao treino vs teste: "
 # Dimensionalidade final apos o encoding
 _insp = criar_preprocessador().fit(X_train)   # instancia usada so para inspecao
 nomes_features = list(_insp.get_feature_names_out())
+# Contamos os prefixos REAIS gerados pelo ColumnTransformer em vez de assumir que
+# toda feature declarada sobrevive: o SimpleImputer descarta silenciosamente
+# colunas 100% nulas, entao a aritmetica "declaradas + OHE" pode nao fechar.
+n_num_saida = sum(1 for n in nomes_features if n.startswith('num__'))
+n_cat_saida = sum(1 for n in nomes_features if n.startswith('cat__'))
 print(f"\n  Colunas apos scaling + OHE: {len(nomes_features)}")
-print(f"  ({len(FEATURES_NUMERICAS)} numericas padronizadas + "
-      f"{len(nomes_features)-len(FEATURES_NUMERICAS)} binarias do OHE)")
+print(f"  ({n_num_saida} numericas padronizadas + {n_cat_saida} binarias do OHE)")
+if n_num_saida != len(FEATURES_NUMERICAS):
+    print(f"  ATENCAO: {len(FEATURES_NUMERICAS)} numericas declaradas, mas apenas "
+          f"{n_num_saida} chegaram a matriz - alguma coluna foi descartada por ser 100% nula")
 print("\n  Exemplo de colunas geradas pelo OHE:")
 for n in [n for n in nomes_features if n.startswith('cat__')][:6]:
     print(f"    {n}")
@@ -816,18 +895,29 @@ df_result = pd.DataFrame(resultados).set_index('modelo')
 # ### 7.1 Quadro comparativo
 
 # %%
-cols_show = ['accuracy', 'precision', 'recall', 'f1', 'auc_roc',
+cols_show = ['accuracy', 'precision', 'recall', 'f1', 'auc_roc', 'avg_prec',
              'cv_auc_mean', 'cv_auc_std', 'tempo_s']
-print("=" * 100)
+print("=" * 112)
 print("COMPARATIVO NO HOLDOUT (ordenado por AUC-ROC)")
-print("=" * 100)
+print("=" * 112)
 print(df_result[cols_show].sort_values('auc_roc', ascending=False).round(4).to_string())
-print("=" * 100)
+print("=" * 112)
+print("avg_prec = average precision (area sob a curva Precision-Recall); "
+      f"prevalencia do teste = {y_test.mean():.4f}")
 
-melhor_nome = df_result.drop(index='Baseline (Dummy)')['auc_roc'].idxmax()
+# A escolha do melhor modelo usa a VALIDACAO CRUZADA no treino, nunca o holdout -
+# selecionar pelo teste seria decidir olhando o conjunto que deveria permanecer
+# intocado. Reportamos o holdout apenas para conferir se a ordem se confirma.
+_cands = df_result.drop(index='Baseline (Dummy)')
+melhor_nome = _cands['cv_auc_mean'].idxmax()
 melhor_pipe = pipelines[melhor_nome]
-print(f"\n>>> MELHOR MODELO (pre-tuning): {melhor_nome} "
-      f"(AUC = {df_result.loc[melhor_nome, 'auc_roc']:.4f})")
+print(f"\n>>> MELHOR MODELO (pre-tuning), escolhido pela CV: {melhor_nome}")
+print(f"    CV AUC no treino = {df_result.loc[melhor_nome, 'cv_auc_mean']:.4f}  |  "
+      f"AUC no holdout = {df_result.loc[melhor_nome, 'auc_roc']:.4f}")
+print(f"    Ordem por CV     : {' > '.join(_cands['cv_auc_mean'].sort_values(ascending=False).index)}")
+print(f"    Ordem por holdout: {' > '.join(_cands['auc_roc'].sort_values(ascending=False).index)}")
+print(f"    As duas ordens coincidem? "
+      f"{'SIM' if list(_cands['cv_auc_mean'].sort_values(ascending=False).index) == list(_cands['auc_roc'].sort_values(ascending=False).index) else 'NAO'}")
 
 ganho = (df_result.loc[melhor_nome, 'auc_roc'] - df_result.loc['Baseline (Dummy)', 'auc_roc'])
 print(f">>> Ganho sobre o baseline aleatorio: +{ganho:.4f} de AUC")
@@ -873,8 +963,12 @@ plt.show()
 # %% [markdown]
 # ### 7.2 Curva ROC, curva Precision-Recall e matriz de confusao
 #
-# Em base desbalanceada a curva **Precision-Recall** e mais informativa que a
-# ROC, por isso reportamos as duas.
+# Reportamos as duas curvas de proposito. A **ROC** mede o ordenamento de risco
+# independentemente do limiar e e a metrica que otimizamos no tuning (Secao 8). A
+# **Precision-Recall** e mais sensivel a classe minoritaria e mostra o custo pratico
+# de operar em cada nivel de recall. Com desbalanceamento brando (1:2,75) a ROC
+# continua confiavel; em bases muito mais desbalanceadas a PR seria a escolha
+# primaria. As duas juntas dizem mais do que qualquer uma sozinha.
 
 # %%
 fig, axes = plt.subplots(1, 3, figsize=(19, 5.5))
@@ -1087,12 +1181,20 @@ print(df_tuning[['auc_antes', 'auc_depois', 'ganho_auc', 'f1_antes', 'f1_depois'
                  'accuracy', 'precision', 'recall']].round(4).to_string())
 print("=" * 104)
 
-melhor_final = df_tuning['auc_depois'].idxmax()
+# Novamente: o campeao e eleito pelo AUC da VALIDACAO CRUZADA (coluna cv_auc, vinda
+# do GridSearchCV sobre o treino). O holdout so confirma.
+melhor_final = df_tuning['cv_auc'].idxmax()
 modelo_final = pipelines_tuned[melhor_final]
-print(f"\n>>> MODELO FINAL: {melhor_final}")
-print(f"    AUC no holdout : {df_tuning.loc[melhor_final,'auc_depois']:.4f}")
-print(f"    F1 no holdout  : {df_tuning.loc[melhor_final,'f1_depois']:.4f}")
-print(f"    Hiperparametros: {buscas[melhor_final].best_params_}")
+_ordem_cv = list(df_tuning['cv_auc'].sort_values(ascending=False).index)
+_ordem_ho = list(df_tuning['auc_depois'].sort_values(ascending=False).index)
+print(f"\n>>> MODELO FINAL (eleito pela CV): {melhor_final}")
+print(f"    CV AUC no treino : {df_tuning.loc[melhor_final,'cv_auc']:.4f}")
+print(f"    AUC no holdout   : {df_tuning.loc[melhor_final,'auc_depois']:.4f}")
+print(f"    F1 no holdout    : {df_tuning.loc[melhor_final,'f1_depois']:.4f}")
+print(f"    Hiperparametros  : {buscas[melhor_final].best_params_}")
+print(f"    Ordem por CV = {_ordem_cv}")
+print(f"    Ordem por holdout = {_ordem_ho}")
+print(f"    Coincidem? {'SIM - a escolha nao dependeu do teste' if _ordem_cv == _ordem_ho else 'NAO'}")
 
 # %%
 fig, ax = plt.subplots(figsize=(11, 5.5))
@@ -1144,6 +1246,16 @@ print(f"  Indenizacao no teste : media R$ {ys_test.mean():,.0f} | "
 print(f"  Assimetria (skew) do target: {y_sev.skew():.2f} "
       f"-> cauda longa a direita, tipica de severidade em seguros")
 
+_zeros = int((y_sev == 0).sum())
+print(f"\n[COMPOSICAO DO ALVO] {_zeros:,} das {len(y_sev):,} apolices sinistradas "
+      f"({_zeros/len(y_sev)*100:.1f}%) tem indenizacao apurada de R$ 0.")
+print("  Sao sinistros com evento registrado mas sem pagamento. Mantivemos essas")
+print("  linhas: exclui-las mudaria a pergunta de 'quanto custa um sinistro' para")
+print("  'quanto custa um sinistro que gerou pagamento'. A consequencia e que o")
+print("  modelo precisa aprender duas coisas ao mesmo tempo - se havera pagamento e")
+print("  de quanto ele sera -, o que limita o R2 alcancavel e e uma explicacao")
+print("  concorrente, alem da falta de dados de intensidade do evento climatico.")
+
 # %%
 regressores = {
     'Baseline (media)':  DummyRegressor(strategy='mean'),
@@ -1166,17 +1278,30 @@ for nome, reg in regressores.items():
     mae = mean_absolute_error(ys_test, pred)
     rmse = float(np.sqrt(mean_squared_error(ys_test, pred)))
     r2 = r2_score(ys_test, pred)
-    linhas_reg.append({'modelo': nome, 'MAE': mae, 'RMSE': rmse, 'R2': r2, 'tempo_s': tempo})
+    # CV no TREINO: e por ela que o campeao sera eleito, nao pelo holdout.
+    cv_r2 = cross_val_score(pipe, Xs_train, ys_train,
+                            cv=KFold(CV_FOLDS, shuffle=True, random_state=RANDOM_STATE),
+                            scoring='r2', n_jobs=-1)
+    linhas_reg.append({'modelo': nome, 'MAE': mae, 'RMSE': rmse, 'R2': r2,
+                       'cv_r2_mean': cv_r2.mean(), 'cv_r2_std': cv_r2.std(), 'tempo_s': tempo})
     pipelines_reg[nome] = pipe
-    print(f"  {nome:20s} MAE = R$ {mae:>11,.0f} | RMSE = R$ {rmse:>11,.0f} | R2 = {r2:>7.4f}")
+    print(f"  {nome:20s} MAE = R$ {mae:>11,.0f} | RMSE = R$ {rmse:>11,.0f} | "
+          f"R2 = {r2:>7.4f} | CV R2 = {cv_r2.mean():.4f} +/- {cv_r2.std():.4f}")
 
 df_reg = pd.DataFrame(linhas_reg).set_index('modelo')
-melhor_reg = df_reg.drop(index='Baseline (media)')['R2'].idxmax()
+melhor_reg = df_reg.drop(index='Baseline (media)')['cv_r2_mean'].idxmax()
 print("=" * 88)
-print(f">>> MELHOR REGRESSOR: {melhor_reg} (R2 = {df_reg.loc[melhor_reg,'R2']:.4f})")
+print(f">>> MELHOR REGRESSOR (eleito pela CV): {melhor_reg}")
+print(f"    CV R2 no treino : {df_reg.loc[melhor_reg,'cv_r2_mean']:.4f} "
+      f"+/- {df_reg.loc[melhor_reg,'cv_r2_std']:.4f}")
+print(f"    R2 no holdout   : {df_reg.loc[melhor_reg,'R2']:.4f}")
 print(f">>> Reducao de MAE sobre o baseline: "
       f"R$ {df_reg.loc['Baseline (media)','MAE'] - df_reg.loc[melhor_reg,'MAE']:,.0f} "
       f"({(1 - df_reg.loc[melhor_reg,'MAE']/df_reg.loc['Baseline (media)','MAE'])*100:.1f}%)")
+print(f"\n[RESSALVA] O R2 de um split unico e instavel num alvo com cauda pesada.")
+print(f"           O desvio da CV ({df_reg.loc[melhor_reg,'cv_r2_std']:.4f}) e a medida")
+print(f"           honesta dessa incerteza - o valor pontual do holdout nao deve ser")
+print(f"           lido como precisao de 4 casas.")
 
 # %%
 fig, axes = plt.subplots(1, 3, figsize=(19, 5.5))
@@ -1325,9 +1450,8 @@ print(pd.DataFrame({'queda_AUC': perm_s.round(4),
 # - `NR_AREA_TOTAL` e `LOG_AREA` sao a mesma variavel em escalas diferentes:
 #   ambas ficam em torno de zero.
 # - `VL_LIMITE_GARANTIA` e `LOG_LIMITE`: mesma situacao.
-# - `CONAB_AREA_CANA_UF` marca exatamente 0,0000 - e constante dentro de cada UF,
-#   ou seja, totalmente redundante com `SG_UF_PROPRIEDADE`. **O complementar da
-#   CONAB nao agrega poder preditivo**, e o registramos honestamente.
+# - `CONAB_AREA_CANA_UF` e constante dentro de cada UF, portanto redundante com
+#   `SG_UF_PROPRIEDADE`: embaralhar uma nao machuca enquanto a outra permanece.
 # - `NM_CULTURA_GLOBAL` aparece com importancia baixa por um motivo mais sutil:
 #   a cultura **determina o calendario agricola**. Soja, milho 2a safra e trigo tem
 #   janelas de vigencia e meses de plantio distintos, entao `DURACAO_VIGENCIA_DIAS`,
@@ -1440,6 +1564,19 @@ print(f"Risco no decil de menor taxa : {g3.iloc[0]*100:.1f}%")
 print(f"Risco no decil de maior taxa : {g3.iloc[-1]*100:.1f}%")
 df.drop(columns=['_decil_taxa'], inplace=True)
 
+# Os mesmos numeros em texto, para que as conclusoes da Secao 14.2 nao dependam
+# de o leitor conseguir ler os rotulos dentro da figura.
+print("\nTaxa de sinistro por CULTURA (n>=200):")
+print((df.groupby('NM_CULTURA_GLOBAL')
+         .agg(taxa_sinistro=('TEVE_SINISTRO', 'mean'), n=('TEVE_SINISTRO', 'size'))
+         .query('n >= 200').sort_values('taxa_sinistro', ascending=False)
+         .assign(taxa_sinistro=lambda d: (d.taxa_sinistro * 100).round(1))).to_string())
+print("\nTaxa de sinistro por UF (n>=200):")
+print((df.groupby('SG_UF_PROPRIEDADE')
+         .agg(taxa_sinistro=('TEVE_SINISTRO', 'mean'), n=('TEVE_SINISTRO', 'size'))
+         .query('n >= 200').sort_values('taxa_sinistro', ascending=False)
+         .assign(taxa_sinistro=lambda d: (d.taxa_sinistro * 100).round(1))).to_string())
+
 # %% [markdown]
 # ## 11. Validacao Temporal (out-of-time)
 #
@@ -1484,6 +1621,22 @@ print("HOLDOUT ALEATORIO vs VALIDACAO TEMPORAL")
 print("=" * 88)
 print(df_temp.round(4).to_string())
 print("=" * 88)
+
+# A ordem dos modelos se mantem quando trocamos de protocolo de validacao?
+_ord_ale = list(df_temp['auc_holdout_aleatorio'].sort_values(ascending=False).index)
+_ord_oot = list(df_temp['auc_temporal_2024'].sort_values(ascending=False).index)
+print(f"\nOrdem no holdout aleatorio : {_ord_ale}")
+print(f"Ordem no teste out-of-time : {_ord_oot}")
+if _ord_ale == _ord_oot:
+    print(f"-> A ordem SE MANTEM. O campeao ({_ord_ale[0]}) lidera nos dois protocolos,")
+    print("   o que reforca a escolha do modelo, ainda que o nivel absoluto caia muito.")
+else:
+    print(f"-> A ordem MUDA: {_ord_ale[0]} lidera no holdout aleatorio, mas {_ord_oot[0]}")
+    print("   e superior fora da amostra. Quem for a producao deve reavaliar sob")
+    print("   protocolo temporal.")
+
+# %% [markdown]
+# ### 11.1 Por que a performance cai: o ranking de risco se inverte
 
 # %%
 # Por que a performance cai? O ranking de risco se INVERTE entre as safras.
@@ -1559,30 +1712,179 @@ print(f"AUC intra-safra medio: {df_intra['auc'].mean():.4f} "
       f"(min {df_intra['auc'].min():.4f} | max {df_intra['auc'].max():.4f})")
 
 # %% [markdown]
-# ### 11.1 O achado
+# ### 11.2 De onde vem a diferenca entre 0,89 e 0,60?
+#
+# O salto entre o holdout aleatorio e o teste out-of-time e grande demais para ficar
+# sem explicacao. Comecamos verificando a promessa feita na Secao 4.5 - se excluir
+# `ANO_APOLICE` realmente tirou o ano do modelo - e depois decompomos a diferenca em
+# tres parcelas, medindo cada uma:
+#
+# 1. **Efeito de coorte** - parte do AUC vem de ordenar safras, nao apolices.
+#    Medimos calculando o AUC **dentro de cada safra** e ponderando pelo tamanho:
+#    isso neutraliza a comparacao entre anos.
+# 2. **Vazamento de grupo** - a base tem 18.872 apolices para cerca de 10,6 mil
+#    segurados. Um split aleatorio coloca o **mesmo produtor** nos dois lados.
+#    Medimos com `GroupShuffleSplit` agrupando por documento do segurado.
+# 3. **Falha genuina de transferencia entre safras** - o que sobra.
+
+# %%
+# Teste de honestidade: remover a coluna ANO_APOLICE realmente remove o ano?
+CAL = ['MES_INICIO', 'MES_FIM', 'DURACAO_VIGENCIA_DIAS', 'DIAS_PROPOSTA_APOLICE']
+_ano = df['ANO_APOLICE'].astype(int)
+_maj = _ano.value_counts(normalize=True).max()
+
+
+def _pre_subset(cols):
+    """Pre-processador restrito a um subconjunto de colunas."""
+    return ColumnTransformer([
+        ('num', Pipeline([('i', SimpleImputer(strategy='median')), ('s', StandardScaler())]),
+         [c for c in cols if c in FEATURES_NUMERICAS]),
+        ('cat', Pipeline([('i', SimpleImputer(strategy='most_frequent')),
+                          ('o', OneHotEncoder(handle_unknown='ignore', sparse_output=False))]),
+         [c for c in cols if c in FEATURES_CATEGORICAS])])
+
+
+print("O ANO E RECUPERAVEL A PARTIR DAS FEATURES QUE MANTIVEMOS?")
+print("=" * 74)
+for rotulo, cols in [('todas as features do modelo', FEATURES),
+                     ('features SEM o calendario', [c for c in FEATURES if c not in CAL]),
+                     ('apenas as 4 de calendario', CAL)]:
+    _a, _b, _ya, _yb = train_test_split(df[cols], _ano, test_size=TEST_SIZE,
+                                        random_state=RANDOM_STATE, stratify=_ano)
+    _p = Pipeline([('pre', _pre_subset(cols)),
+                   ('clf', RandomForestClassifier(n_estimators=300,
+                            random_state=RANDOM_STATE, n_jobs=-1))]).fit(_a, _ya)
+    print(f"  acerta a safra exata com {rotulo:29s}: {accuracy_score(_yb, _p.predict(_b))*100:5.1f}%")
+print(f"  {'chute na classe majoritaria':56s}: {_maj*100:5.1f}%")
+print("=" * 74)
+
+# %% [markdown]
+# **O teste reprova a versao ingenua do nosso proprio argumento - e registramos
+# isso.** Remover a coluna `ANO_APOLICE` **nao** remove o ano do modelo. O conjunto
+# completo de features identifica a safra exata em cerca de **97% dos casos**, contra
+# 40% de chute. Mais revelador ainda: mesmo **descartando todas as variaveis de
+# calendario**, a recuperacao continua em torno de **95%** - porque os valores
+# monetarios, as taxas e as produtividades tambem evoluem ano a ano. O calendario
+# sozinho ja acerta cerca de dois tercos.
+#
+# Ou seja: **nao existe subconjunto razoavel de features que apague a safra.** O ano
+# nao esta numa coluna, esta difundido em todas elas.
+#
+# **Isso e vazamento?** Nao do target. Todas essas variaveis sao contratuais e
+# conhecidas na subscricao; nenhuma informacao posterior ao sinistro entra no modelo.
+# O que existe e um **efeito de coorte** induzido pelo desenho amostral: num split
+# aleatorio sobre seis safras, treino e teste compartilham os mesmos anos, e o modelo
+# pode se apoiar em "esta apolice parece de 2021" - safra em que 71,4% das apolices
+# sinistraram.
+#
+# A pergunta certa deixa de ser *"conseguimos eliminar o ano?"* (nao conseguimos) e
+# passa a ser **"quanto do nosso AUC vem disso?"** - que e o que a decomposicao
+# abaixo responde.
+
+# %%
+_clf_final = clone(modelo_final)                 # mesmos hiperparametros, nao treinado
+_prob_hold = modelo_final.predict_proba(X_test)[:, 1]
+_auc_hold = roc_auc_score(y_test, _prob_hold)
+
+
+def _auc_ponderado_por_safra(anos, y_true, prob):
+    """AUC calculado DENTRO de cada safra e ponderado pelo n de cada uma."""
+    num = den = 0.0
+    for a in sorted(pd.Series(anos).unique()):
+        m = (pd.Series(anos).to_numpy() == a)
+        if pd.Series(y_true).to_numpy()[m].std() == 0:
+            continue
+        num += roc_auc_score(pd.Series(y_true).to_numpy()[m], prob[m]) * m.sum()
+        den += m.sum()
+    return num / den
+
+
+# (1) efeito de coorte
+_auc_intra = _auc_ponderado_por_safra(df.loc[X_test.index, 'ANO_APOLICE'], y_test, _prob_hold)
+
+# (2) vazamento de grupo: nenhum segurado aparece nos dois lados
+from sklearn.model_selection import GroupShuffleSplit
+
+_grupos = df['NR_DOCUMENTO_SEGURADO'].fillna('SEM_DOC')
+_itr, _ite = next(GroupShuffleSplit(n_splits=1, test_size=TEST_SIZE,
+                                    random_state=RANDOM_STATE).split(X, y, groups=_grupos))
+_Xg_tr, _Xg_te = X.iloc[_itr].copy(), X.iloc[_ite].copy()
+_fq = df.iloc[_itr]['NM_MUNICIPIO_PROPRIEDADE'].value_counts(normalize=True)
+_Xg_tr['FREQ_MUNICIPIO'] = df.iloc[_itr]['NM_MUNICIPIO_PROPRIEDADE'].map(_fq).fillna(0.0).values
+_Xg_te['FREQ_MUNICIPIO'] = df.iloc[_ite]['NM_MUNICIPIO_PROPRIEDADE'].map(_fq).fillna(0.0).values
+
+_clf_final.fit(_Xg_tr, y.iloc[_itr])
+_prob_g = _clf_final.predict_proba(_Xg_te)[:, 1]
+_auc_grupo = roc_auc_score(y.iloc[_ite], _prob_g)
+_auc_limpo = _auc_ponderado_por_safra(df.iloc[_ite]['ANO_APOLICE'], y.iloc[_ite], _prob_g)
+
+_auc_oot = df_temp.loc[melhor_final, 'auc_temporal_2024']
+_sobrep = df.loc[X_test.index, 'NR_DOCUMENTO_SEGURADO'].isin(
+    df.loc[X_train.index, 'NR_DOCUMENTO_SEGURADO']).mean()
+
+print(f"Segurados distintos: {_grupos.nunique():,} para {len(df):,} apolices "
+      f"({len(df)/_grupos.nunique():.2f} apolices por segurado)")
+print(f"Linhas do holdout cujo segurado tambem esta no treino: {_sobrep*100:.1f}%\n")
+
+_decomp = pd.DataFrame([
+    ['(a) Holdout aleatorio (numero reportado)', _auc_hold, np.nan],
+    ['(b) ... medindo so DENTRO de cada safra',  _auc_intra, _auc_intra - _auc_hold],
+    ['(c) ... com split por SEGURADO',           _auc_grupo, _auc_grupo - _auc_hold],
+    ['(d) ... por segurado E dentro da safra',   _auc_limpo, _auc_limpo - _auc_hold],
+    ['(e) Out-of-time: treino <=2023, teste 2024', _auc_oot, _auc_oot - _auc_hold],
+], columns=['cenario', 'AUC', 'delta_vs_(a)']).set_index('cenario')
+print("DECOMPOSICAO DO AUC")
+print("=" * 78)
+print(_decomp.round(4).to_string())
+print("=" * 78)
+
+_gap = _auc_hold - _auc_oot
+_artefato = _auc_hold - _auc_limpo
+print(f"\nQueda total ate o out-of-time      : {_gap:.4f}")
+print(f"  atribuivel a desenho amostral    : {_artefato:.4f} ({_artefato/_gap*100:.1f}%)")
+print(f"    - efeito de coorte (safra)     : {_auc_hold-_auc_intra:.4f}")
+print(f"    - vazamento de grupo (segurado): {_auc_hold-_auc_grupo:.4f}")
+print(f"  falha real de transferencia      : {_auc_limpo-_auc_oot:.4f} "
+      f"({(_auc_limpo-_auc_oot)/_gap*100:.1f}%)")
+
+# %% [markdown]
+# ### 11.3 O achado
 #
 # Os numeros acima contam uma historia consistente:
 #
-# - **Dentro de cada safra** o modelo discrimina risco muito bem (AUC alto e
-#   estavel em todas as seis safras, inclusive nas de baixa sinistralidade).
-# - **Entre safras** a performance despenca para perto do acaso.
+# - **Dentro de cada safra** o modelo discrimina risco muito bem: AUC alto e estavel
+#   nas seis safras, inclusive nas de baixa sinistralidade.
+# - **Entre safras** a performance cai drasticamente, retendo apenas sinal residual.
 #
-# A causa esta no grafico do meio: o **ranking de risco se inverte**. Milho 2a
-# safra foi a cultura mais sinistrada em 2021 (seca historica) e uma das menos
-# sinistradas em 2023. Um modelo treinado ate 2023 aprende uma ordenacao que
+# A causa esta no grafico do meio: o **ranking de risco se inverte**. Milho 2a safra
+# foi a cultura mais sinistrada em 2021 (95,1%, na seca historica) e uma das menos
+# sinistradas em 2023 (5,6%). Um modelo treinado ate 2023 aprende uma ordenacao que
 # **deixa de valer** na safra seguinte.
 #
-# **Conclusao tecnica.** Os atributos da apolice (cultura, area, valores,
-# geografia) explicam bem o risco **relativo** dentro de um mesmo contexto
-# climatico, mas nao capturam o **choque climatico anual**, que e o fator
-# dominante do seguro agricola. Para previsao out-of-time seria indispensavel
-# incorporar variaveis climaticas com valores efetivos (precipitacao acumulada,
-# dias de deficit hidrico, ocorrencia de geada) - exatamente o dado que a
-# Sprint 2 registrou como indisponivel (estacoes INMET com metadados, porem
-# series mensais nulas).
+# **A decomposicao da Secao 11.2 mostra que a queda nao e artefato.** Uma parte
+# menor vem do desenho amostral - efeito de coorte e o mesmo produtor nos dois lados
+# do split. Mas a maior parte da diferenca **sobrevive** a correcao dos dois: mesmo
+# comparando so dentro da safra e sem compartilhar segurados, o AUC continua muito
+# acima do out-of-time. A falha de transferencia entre safras e **real**, e nao um
+# efeito de amostragem.
 #
-# Esse resultado transforma uma limitacao herdada em **requisito tecnico
-# justificado por evidencia** para a proxima sprint.
+# **Um detalhe que merece registro: a ordem dos modelos se mantem.** A celula acima
+# compara explicitamente o ranking nos dois protocolos. O nivel absoluto de
+# performance desaba, mas a **ordenacao relativa entre os tres modelos e estavel** -
+# o campeao eleito pela validacao cruzada continua sendo o melhor tambem na previsao
+# da safra seguinte. Isso reforca a escolha do modelo: o que a validacao temporal
+# derruba e a expectativa de performance, nao a decisao de qual algoritmo usar.
+#
+# **Conclusao tecnica.** Os atributos da apolice (cultura, area, valores, geografia)
+# explicam bem o risco **relativo** dentro de um mesmo contexto climatico, mas nao
+# capturam o **choque climatico anual**, que e o fator dominante do seguro agricola.
+# Para previsao out-of-time seria indispensavel incorporar variaveis climaticas com
+# valores efetivos (precipitacao acumulada, dias de deficit hidrico, ocorrencia de
+# geada) - exatamente o dado que a Sprint 2 registrou como indisponivel (estacoes
+# INMET com metadados, porem series mensais nulas).
+#
+# Esse resultado transforma uma limitacao herdada em **requisito tecnico justificado
+# por evidencia** para a proxima sprint.
 
 # %% [markdown]
 # ## 12. Comparacao com a Sprint 2 (target derivado vs target real)
@@ -1801,11 +2103,22 @@ print("=" * 78)
 #
 # **1. A janela de exposicao climatica e o fator dominante.**
 # Na permutation importance individual, `DURACAO_VIGENCIA_DIAS` e a variavel cujo
-# embaralhamento mais derruba o AUC. Junto com `MES_INICIO` e `MES_FIM`, ela descreve
-# *quanto tempo* e *em qual estacao* a lavoura fica exposta. Somadas a cultura, essas
-# variaveis formam o bloco mais importante do modelo por larga margem. E um resultado
-# com sentido agronomico direto: mais dias de vigencia significam mais chances de
-# atravessar uma seca, uma geada ou um granizo.
+# embaralhamento mais derruba o AUC. Junto com `MES_INICIO` e `MES_FIM`, ela forma o
+# bloco mais importante do modelo por larga margem.
+#
+# **Cuidado com a leitura causal.** Seria tentador concluir "mais dias de vigencia =
+# mais tempo exposto = mais risco". **Os dados nao sustentam isso.** A correlacao
+# marginal entre duracao e sinistro e praticamente nula e de sinal *negativo*
+# (-0,045), e a relacao nao e monotonica: as apolices mais curtas (ate 150 dias) tem
+# 32,7% de sinistralidade, as intermediarias caem para cerca de 17%, e as mais longas
+# voltam a 30,4%. A prova definitiva vem da comparacao direta: **Soja e Milho 2a safra
+# tem exatamente a mesma duracao mediana (150 dias) e taxas de sinistro de 18,9% e
+# 42,2%**.
+#
+# A duracao nao mede dose de exposicao - ela funciona como **impressao digital do
+# calendario da cultura**. Combinada com o mes de inicio e de fim, identifica em que
+# janela do ano a lavoura esta no campo, e e a janela (inverno seco x verao chuvoso)
+# que carrega o risco. Isso explica por que o item 2 abaixo e a leitura correta.
 #
 # **2. A cultura age atraves do calendario, nao ao lado dele.**
 # Tomada isoladamente, `NM_CULTURA_GLOBAL` tem permutation importance quase nula -
@@ -1837,11 +2150,19 @@ print("=" * 78)
 # sinistro climatico atinge a lavoura independentemente do tamanho dela. O que pesa e
 # o valor segurado *por hectare* (intensidade da cobertura), nao o valor total.
 #
-# **6. Um complementar que nao agregou.**
-# `CONAB_AREA_CANA_UF` marcou importancia exatamente zero. Por ser constante dentro
-# de cada UF, e inteiramente redundante com `SG_UF_PROPRIEDADE`. Registramos o
-# resultado negativo em vez de omiti-lo: nem todo enriquecimento de base se converte
-# em poder preditivo.
+# **6. O complementar da CONAB agrega pouco, e sabemos por que.**
+# `CONAB_AREA_CANA_UF` e `SG_UF_PROPRIEDADE` marcam praticamente a mesma importancia
+# individual, ambas baixas. Nao e coincidencia: a area de cana e **constante dentro de
+# cada UF**, logo as duas carregam a mesma informacao e embaralhar uma nao machuca
+# enquanto a outra permanece. O sinal geografico util esta nas **coordenadas**, que
+# discriminam microrregiao, e nao no agregado estadual.
+#
+# Vale o registro de processo: esta sprint descobriu que o join com a CONAB herdado da
+# Sprint 2 estava quebrado (cabecalho lido na linha errada e mapeamento de UF por
+# nome, quando a planilha usa siglas) e a coluna vinha 100% nula. Corrigido o join, a
+# variavel passou a ter valores reais - e a conclusao acima e sobre a variavel
+# funcionando, nao sobre um bug. Nem todo enriquecimento de base se converte em poder
+# preditivo, mas essa afirmacao so vale depois de garantir que o dado chegou.
 #
 # ### 14.3 Limitacoes
 #
@@ -1850,14 +2171,34 @@ print("=" * 78)
 #    disponiveis estao nulas; usamos apenas metadados geograficos das estacoes.
 # 2. **Generalizacao temporal limitada.** O modelo ordena risco muito bem dentro
 #    de uma safra, mas nao antecipa o choque climatico da safra seguinte.
-# 3. **Severidade parcialmente explicada.** O R2 da regressao reflete que o
-#    valor pago depende da intensidade do evento, ausente na base.
-# 4. **Escopo da carteira.** O recorte cobre 10 UFs e 11 culturas, com forte
+# 3. **O AUC do holdout aleatorio nao e o AUC de producao.** A Secao 11.2 decompoe
+#    a diferenca: parte vem de **efeito de coorte** (o ano permanece recuperavel a
+#    ~97% mesmo sem a coluna `ANO_APOLICE`) e parte de **vazamento de grupo** (a base
+#    tem ~1,78 apolice por segurado, e o split aleatorio poe o mesmo produtor nos dois
+#    lados). O numero corrigido para os dois efeitos e menor que o reportado, e o
+#    out-of-time e menor ainda. Reportamos o holdout aleatorio porque e o que o
+#    enunciado exige, sempre acompanhado dessa decomposicao.
+# 4. **Severidade parcialmente explicada.** Alem da falta de dados de intensidade do
+#    evento, **18% das apolices sinistradas tem indenizacao de R$ 0** (evento
+#    registrado sem pagamento apurado) e foram mantidas no alvo. O modelo precisa
+#    aprender simultaneamente *se* havera pagamento e *de quanto* ele sera, o que
+#    limita o R2. O valor pontual do holdout tambem e instavel: o desvio da validacao
+#    cruzada e a medida honesta dessa incerteza.
+# 5. **Qualidade do dado de origem.** A base do MAPA traz erros de digitacao - por
+#    exemplo, uma apolice com `DT_FIM_VIGENCIA` em 5207, saneada na Secao 4.4. Nao
+#    fizemos auditoria exaustiva de todos os campos.
+# 6. **Complementares com contribuicao desigual.** Os joins com IBGE e CONAB tiveram
+#    de ser refeitos nesta sprint (a chave herdada da Sprint 2 estava incorreta em
+#    ambos). Mesmo corrigidos, sua contribuicao preditiva e pequena: `CONAB_AREA_CANA_UF`
+#    e constante dentro da UF, e o IBGE serve como validacao cadastral, nao como
+#    feature. O unico complementar com efeito direto no modelo e a distancia a estacao
+#    INMET mais proxima.
+# 7. **Escopo da carteira.** O recorte cobre 10 UFs e 11 culturas, com forte
 #    concentracao em Soja e Milho 2a safra no Sul e Sudeste. Culturas e regioes
 #    pouco representadas tem estimativas menos confiaveis.
-# 5. **Vies de selecao do PSR.** A base cobre apenas apolices com subvencao
+# 8. **Vies de selecao do PSR.** A base cobre apenas apolices com subvencao
 #    federal; contratos privados sem subvencao nao aparecem.
-# 6. **Dominio.** O desafio menciona maquinas agricolas, enquanto o PSR cobre
+# 9. **Dominio.** O desafio menciona maquinas agricolas, enquanto o PSR cobre
 #    culturas. O dominio de risco climatico rural e analogo, porem nao identico -
 #    limitacao ja declarada na Sprint 2 e mantida aqui por transparencia.
 #

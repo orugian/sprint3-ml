@@ -20,10 +20,12 @@ dados públicos oficiais do Programa de Subvenção ao Prêmio do Seguro Rural (
 | 3 | Métricas de classificação | accuracy, precision, recall, f1-score, AUC-ROC (+ AP e CV k=5) | 7 |
 | 3 | Métricas de regressão | MAE, RMSE, R² sobre a severidade em R$ | 9 |
 | 4 | Tuning de hiperparâmetros | `GridSearchCV`; **k do KNN** otimizado, mais RF e GB | 8 |
-| 5 | Interpretação do risco | Feature importance + permutation importance + leitura de negócio | 10 |
+| 5 | Interpretação do risco | 3 técnicas: importância de impureza + permutation individual + **permutation por bloco** (corrige a diluição entre variáveis correlacionadas) | 10 |
 
-**Além do exigido:** validação temporal *out-of-time* (Seção 11), comparativo
-direto com a Sprint 2 (Seção 12) e persistência dos modelos (Seção 13).
+**Além do exigido:** auditoria anti-vazamento coluna a coluna das 38 originais
+(Seção 4.5), validação temporal *out-of-time* (Seção 11), **decomposição do AUC** em
+efeito de coorte, vazamento de grupo e falha real de transferência (Seção 11.2),
+comparativo direto com a Sprint 2 (Seção 12) e persistência dos modelos (Seção 13).
 
 ---
 
@@ -72,36 +74,44 @@ Modelamos a decomposição atuarial clássica do prêmio puro,
 
 **Tarefa A — classificação**, holdout de 3.775 apólices (após tuning):
 
-| Modelo | Accuracy | Precision | Recall | F1 | AUC-ROC |
-|---|---|---|---|---|---|
-| Baseline (`Dummy`) | 0,614 | 0,275 | 0,272 | 0,273 | 0,505 |
-| KNN (k=21, manhattan, distance) | 0,817 | 0,752 | 0,470 | 0,578 | 0,838 |
-| Gradient Boosting | 0,845 | 0,793 | 0,564 | 0,659 | 0,873 |
-| **Random Forest** ← campeão | 0,844 | 0,709 | 0,703 | **0,706** | **0,890** |
+| Modelo | Accuracy | Precision | Recall | F1 | AUC-ROC | CV AUC (treino) |
+|---|---|---|---|---|---|---|
+| Baseline (`Dummy`) | 0,614 | 0,275 | 0,272 | 0,273 | 0,505 | 0,498 |
+| KNN (k=21, manhattan, distance) | 0,818 | 0,753 | 0,473 | 0,581 | 0,837 | 0,833 |
+| Gradient Boosting | 0,847 | 0,799 | 0,571 | 0,666 | 0,879 | 0,867 |
+| **Random Forest** ← campeão | 0,847 | 0,715 | 0,712 | **0,713** | **0,892** | **0,883** |
 
-O critério de escolha foi o **AUC-ROC**, que mede o ordenamento de risco
-independentemente do limiar — apropriado para base desbalanceada. Note o trade-off:
-o Gradient Boosting tem precision maior (0,793 contra 0,709), mas deixa passar
-bem mais sinistros (recall 0,564 contra 0,703). Para uso em alerta preventivo,
-o recall do Random Forest é o comportamento desejado.
+O campeão é eleito pelo **AUC-ROC da validação cruzada no treino**, nunca pelo
+holdout — que serve apenas para confirmar a ordem. Sobre o trade-off precision/recall:
+o Gradient Boosting tem precision maior mas deixa passar bem mais sinistros. A
+comparação não é inteiramente *ceteris paribus* — o Random Forest usa
+`class_weight='balanced'` e o Gradient Boosting não o suporta, e nenhum dos dois teve
+o limiar de decisão otimizado (ambos usam 0,5). Parte da diferença de recall vem daí.
 
 **Tarefa B — regressão da severidade**, holdout de 1.007 apólices sinistradas:
 
-| Modelo | MAE | RMSE | R² |
-|---|---|---|---|
-| Baseline (média) | R$ 61.397 | R$ 115.218 | −0,000 |
-| KNN | R$ 44.665 | R$ 96.909 | 0,293 |
-| Gradient Boosting | R$ 45.998 | R$ 94.718 | 0,324 |
-| **Random Forest** ← campeão | **R$ 44.072** | **R$ 91.676** | **0,367** |
+| Modelo | MAE | RMSE | R² (holdout) | CV R² (treino) |
+|---|---|---|---|---|
+| Baseline (média) | R$ 61.397 | R$ 115.218 | −0,000 | −0,000 |
+| KNN | R$ 44.080 | R$ 95.389 | 0,315 | 0,422 ± 0,059 |
+| Gradient Boosting | R$ 46.256 | R$ 96.347 | 0,301 | 0,383 ± 0,045 |
+| **Random Forest** ← campeão | **R$ 43.608** | **R$ 91.138** | **0,374** | **0,434 ± 0,081** |
 
-**Efeito do tuning** (ganho de AUC no holdout): KNN **+0,036**, Gradient Boosting
-**+0,044**, Random Forest **+0,006**. O `k` ótimo do KNN foi **21** — a curva
+O R² de um split único é instável num alvo de cauda pesada — o desvio da validação
+cruzada (±0,08) é a medida honesta dessa incerteza, e o valor pontual do holdout não
+deve ser lido como precisão de três casas.
+
+**Efeito do tuning** (ganho de AUC no holdout): Gradient Boosting **+0,050**,
+KNN **+0,034**, Random Forest **+0,006**. O `k` ótimo do KNN foi **21** — a curva
 completa de bias-variância está na Seção 8.1.
 
 Os números completos ficam nas saídas do notebook e em
 [`models/metadata.json`](models/metadata.json),
-[`models/resultados_classificacao.csv`](models/resultados_classificacao.csv) e
-[`models/resultados_regressao.csv`](models/resultados_regressao.csv).
+[`models/resultados_classificacao.csv`](models/resultados_classificacao.csv),
+[`models/resultados_regressao.csv`](models/resultados_regressao.csv) e
+[`models/resultados_validacao_temporal.csv`](models/resultados_validacao_temporal.csv)
+— este último contém os resultados *out-of-time*, que são os menos favoráveis do
+trabalho e estão publicados junto com os demais.
 
 ### Quais variáveis mais impactam o risco
 
@@ -110,24 +120,26 @@ Medido por *permutation importance* aplicada a blocos de variáveis correlaciona
 
 | Bloco de informação | Queda de AUC |
 |---|---|
-| **Cultura e calendário agrícola** | **0,252** |
-| Geografia (lat/lon, UF, município) | 0,158 |
-| Precificação e cobertura | 0,112 |
-| Exposição financeira | 0,038 |
-| Produtividade contratada | 0,025 |
-| Processo e tipo de produto | 0,003 |
+| **Cultura e calendário agrícola** | **0,242** |
+| Geografia (lat/lon, UF, município) | 0,171 |
+| Precificação e cobertura | 0,110 |
+| Exposição financeira | 0,036 |
+| Produtividade contratada | 0,024 |
+| Processo e tipo de produto | 0,004 |
 | Escala da operação (área) | −0,000 |
 
 A leitura por blocos é necessária porque a *permutation importance* individual
 subestima variáveis redundantes: isoladamente, `NM_CULTURA_GLOBAL` marca apenas
-0,0015, já que a cultura **determina** o calendário agrícola e sua informação está
-absorvida por `DURACAO_VIGENCIA_DIAS`, `MES_INICIO` e `MES_FIM`.
+**0,0011**, já que a cultura **determina** o calendário agrícola e sua informação
+está absorvida por `DURACAO_VIGENCIA_DIAS`, `MES_INICIO` e `MES_FIM`. O mesmo vale
+para `CONAB_AREA_CANA_UF` e `SG_UF_PROPRIEDADE`, que marcam **0,0034 cada** — por ser
+constante dentro da UF, a variável da CONAB é redundante com a própria UF, e
+embaralhar uma não machuca enquanto a outra permanece.
 
-Dois resultados que registramos por transparência: a **área total praticamente não
-discrimina** risco (o evento climático atinge a lavoura independentemente do tamanho
-— o que pesa é o valor segurado *por hectare*), e o complementar
-`CONAB_AREA_CANA_UF` teve importância **exatamente zero**, por ser constante dentro
-de cada UF e portanto redundante com `SG_UF_PROPRIEDADE`.
+Um resultado que registramos por transparência: a **área total praticamente não
+discrimina** risco (`NR_AREA_TOTAL` e `LOG_AREA` ficam em −0,000; o bloco inteiro de
+escala também). O evento climático atinge a lavoura independentemente do tamanho dela
+— o que pesa é o valor segurado *por hectare*, não o valor total.
 
 ---
 
@@ -137,14 +149,38 @@ A Seção 11 testa o cenário de uso real: treinar com o passado (2019–2023) e
 prever a safra seguinte (2024). O resultado é revelador:
 
 - **Dentro de cada safra**, o modelo ordena risco muito bem — AUC alto e estável
-  nas seis safras.
-- **Entre safras**, a performance cai para perto do acaso.
+  nas seis safras (média 0,859).
+- **Entre safras**, a performance cai drasticamente, retendo apenas sinal residual:
+  **Random Forest 0,604 · Gradient Boosting 0,584 · KNN 0,563**, contra 0,892 / 0,879
+  / 0,837 no holdout aleatório.
 
 A causa é que o **ranking de risco se inverte** entre anos. Milho 2ª safra foi a
 cultura mais sinistrada em 2021 (seca histórica, 95,1%) e uma das menos
 sinistradas em 2023 (5,6%). Os atributos da apólice explicam o risco **relativo**
 dentro de um mesmo contexto climático, mas não capturam o **choque climático
 anual**, que é o fator dominante do seguro agrícola.
+
+A Seção 11.2 **decompõe essa queda** e mostra que ela não é artefato de amostragem:
+
+| Cenário | AUC | Δ |
+|---|---|---|
+| (a) Holdout aleatório (número reportado) | 0,892 | — |
+| (b) …medindo só **dentro de cada safra** | 0,854 | −0,039 (efeito de coorte) |
+| (c) …com split por **segurado** | 0,882 | −0,010 (vazamento de grupo) |
+| (d) …por segurado **e** dentro da safra | 0,844 | −0,049 |
+| (e) **Out-of-time** (treino ≤2023 → 2024) | 0,604 | −0,288 |
+
+Ou seja: **16,9% da queda vem do desenho amostral e 83,1% é falha genuína de
+transferência entre safras.** Descobrimos, medindo, que remover a coluna
+`ANO_APOLICE` **não remove o ano** — ele continua recuperável a 97,1% a partir das
+features mantidas (e a 95,5% mesmo descartando todas as variáveis de calendário).
+A afirmação honesta é "reduzimos o efeito de coorte e o quantificamos", não
+"eliminamos o ano".
+
+A ordem entre os três modelos, porém, **se mantém** nos dois protocolos: o campeão
+eleito pela validação cruzada continua sendo o melhor também fora da amostra. O que
+a validação temporal derruba é a expectativa de performance, não a escolha do
+algoritmo.
 
 Isso converte a limitação herdada da Sprint 2 (dados climáticos do INMET com
 séries nulas) em **requisito técnico justificado por evidência** para a Sprint 4.
@@ -204,13 +240,26 @@ python scripts/prepare_data.py --force
 
 Todas públicas, oficiais e brasileiras.
 
-| Base | Órgão | Uso |
-|---|---|---|
-| [PSR 2016–2024 (SISSER)](https://dados.agricultura.gov.br/dataset/sisser3) | MAPA | **Base principal** — 18.872 apólices Sompo com sinistro real |
-| [PSR 2025](https://dados.agricultura.gov.br/dataset/sisser3) | MAPA | Comparativo com a Sprint 2 |
-| [Série Histórica de Safras](https://www.conab.gov.br/) | CONAB | Perfil agrícola regional por UF |
-| [Códigos de Municípios](https://www.ibge.gov.br/) | IBGE | Validação do código municipal |
-| [Banco de Dados Meteorológicos](https://bdmep.inmet.gov.br/) | INMET | Metadados geográficos das estações |
+| Base | Órgão | Uso | Vira feature? |
+|---|---|---|---|
+| [PSR 2016–2024 (SISSER)](https://dados.agricultura.gov.br/dataset/sisser3) | MAPA | **Base principal** — 18.872 apólices Sompo com sinistro real | sim |
+| [PSR 2025](https://dados.agricultura.gov.br/dataset/sisser3) | MAPA | Comparativo com a Sprint 2 | — |
+| [Banco de Dados Meteorológicos](https://bdmep.inmet.gov.br/) | INMET | Distância à estação mais próxima | **sim** |
+| [Série Histórica de Safras](https://www.conab.gov.br/) | CONAB | Perfil agrícola regional por UF | sim, mas redundante com a UF |
+| [Códigos de Municípios](https://www.ibge.gov.br/) | IBGE | Validação cadastral do município | não |
+
+**Nota sobre os complementares.** A auditoria desta sprint descobriu que **os dois
+joins herdados da Sprint 2 estavam incorretos** e ambos foram refeitos:
+
+- **CONAB** — o cabeçalho da planilha estava sendo lido na linha errada (`header=4`
+  em vez de `header=5`), o que transformava os rótulos de safra em `Unnamed: N`; além
+  disso o arquivo identifica os estados por **sigla**, não por nome por extenso. O
+  join casava **0 apólices** e a coluna ficava 100% nula. Corrigido: **94,2%** de
+  cobertura.
+- **IBGE** — o `CODIGO` do `RUR_MUNI.DBF` não é o prefixo do geocódigo de 7 dígitos,
+  e sim um código sequencial próprio do arquivo. O join por prefixo casava **8,9%**,
+  por coincidência numérica. Trocado pela chave (município normalizado + UF):
+  **98,9%** de cobertura.
 
 ---
 
@@ -221,12 +270,25 @@ Todas públicas, oficiais e brasileiras.
    estão nulas; usamos apenas os metadados geográficos das estações.
 2. **Generalização temporal limitada** — o modelo ordena risco bem dentro de uma
    safra, mas não antecipa o choque climático da safra seguinte.
-3. **Severidade parcialmente explicada** — o valor pago depende da intensidade do
-   evento climático, informação ausente na base.
-4. **Escopo da carteira** — 10 UFs e 11 culturas, com forte concentração em Soja
+3. **O AUC do holdout aleatório não é o AUC de produção** — ele embute efeito de
+   coorte anual e vazamento de grupo por segurado. A Seção 11.2 mede as duas parcelas
+   e reporta o valor corrigido.
+4. **Severidade parcialmente explicada** — além da falta de dados de intensidade do
+   evento, **18% das apólices sinistradas têm indenização de R$ 0** (evento sem
+   pagamento apurado) e foram mantidas no alvo. O R² de um split único também é
+   instável num alvo de cauda pesada; o desvio da validação cruzada é a medida
+   honesta dessa incerteza.
+5. **Qualidade do dado de origem** — a base do MAPA traz erros de digitação (ex.: uma
+   apólice com fim de vigência em 5207, saneada na Seção 4.4). Não houve auditoria
+   exaustiva de todos os campos.
+6. **Complementares com contribuição desigual** — os joins com IBGE e CONAB herdados
+   da Sprint 2 estavam **ambos incorretos** e foram refeitos nesta sprint (ver abaixo).
+   Mesmo corrigidos, contribuem pouco: o único complementar com efeito direto no
+   modelo é a distância à estação INMET mais próxima.
+7. **Escopo da carteira** — 10 UFs e 11 culturas, com forte concentração em Soja
    e Milho 2ª safra no Sul e Sudeste.
-5. **Viés de seleção do PSR** — cobre apenas apólices com subvenção federal.
-6. **Domínio** — o desafio menciona máquinas agrícolas, enquanto o PSR cobre
+8. **Viés de seleção do PSR** — cobre apenas apólices com subvenção federal.
+9. **Domínio** — o desafio menciona máquinas agrícolas, enquanto o PSR cobre
    culturas. O domínio de risco climático rural é análogo, porém não idêntico —
    limitação já declarada na Sprint 2 e mantida aqui por transparência.
 
