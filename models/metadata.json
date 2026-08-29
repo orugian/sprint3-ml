@@ -56,5 +56,11 @@
     "NM_CLASSIF_PRODUTO"
   ],
   "random_state": 42,
-  "sklearn_version": "1.9.0"
+  "sklearn_version": "1.9.0",
+  "freq_municipio": {
+    "arquivo": "models/freq_municipio.pkl",
+    "como_usar": "mapear NM_MUNICIPIO_PROPRIEDADE normalizado (sem acento, maiuscula) contra este Series e preencher ausentes com 0.0",
+    "n_municipios": 925,
+    "ajustado_em": "apenas o conjunto de treino do holdout 80/20"
+  }
 }

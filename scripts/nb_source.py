@@ -1987,10 +1987,17 @@ de verdade, e por isso vale mais.""")
 # %% [markdown]
 # ## 13. Persistencia dos Modelos
 #
-# Serializamos os pipelines completos (pre-processamento + modelo) para uso na
-# API da proxima sprint. Como o `Pipeline` carrega o `StandardScaler` e o
-# `OneHotEncoder` ja ajustados, o consumo em producao recebe o dado bruto e o
-# pre-processamento e reaplicado de forma identica ao treino.
+# Serializamos os pipelines completos (pre-processamento + modelo) para uso na API
+# da proxima sprint. Como o `Pipeline` carrega o `StandardScaler` e o `OneHotEncoder`
+# ja ajustados, o scaling e o encoding sao reaplicados em producao exatamente como no
+# treino.
+#
+# **Com uma excecao, que gravamos junto:** o `FREQ_MUNICIPIO` e construido fora do
+# `ColumnTransformer` (Secao 5.3) e portanto **nao** viaja dentro do `.pkl`. Sem o
+# mapa de frequencias do treino, quem consumir o modelo nao conseguiria montar essa
+# coluna a partir do dado bruto. Por isso serializamos o mapa em
+# `models/freq_municipio.pkl`, junto com a instrucao de uso: mapear
+# `NM_MUNICIPIO_PROPRIEDADE` normalizado e preencher com 0 os municipios ausentes.
 
 # %%
 os.makedirs('models', exist_ok=True)
@@ -1999,6 +2006,10 @@ os.makedirs('models', exist_ok=True)
 # ensembles de arvores sao muito redundantes e comprimem bem.
 joblib.dump(modelo_final, 'models/classificador_sinistro.pkl', compress=3)
 joblib.dump(pipelines_reg[melhor_reg], 'models/regressor_severidade.pkl', compress=3)
+
+# O mapa de frequencias por municipio, sem o qual os .pkl nao sao aplicaveis a dado
+# bruto. E o MESMO mapa usado pelos dois modelos (ajustado so no treino, Secao 5.3).
+joblib.dump(_freq_treino, 'models/freq_municipio.pkl')
 
 metadados = {
     'projeto': 'SOMPO 2026 - Sprint 3 - Modelagem de ML',
@@ -2026,6 +2037,13 @@ metadados = {
     'features_categoricas': FEATURES_CATEGORICAS,
     'random_state': RANDOM_STATE,
     'sklearn_version': sklearn.__version__,
+    'freq_municipio': {
+        'arquivo': 'models/freq_municipio.pkl',
+        'como_usar': ("mapear NM_MUNICIPIO_PROPRIEDADE normalizado (sem acento, "
+                      "maiuscula) contra este Series e preencher ausentes com 0.0"),
+        'n_municipios': int(_freq_treino.shape[0]),
+        'ajustado_em': 'apenas o conjunto de treino do holdout 80/20',
+    },
 }
 with open('models/metadata.json', 'w', encoding='utf-8') as fp:
     json.dump(metadados, fp, indent=2, ensure_ascii=False)
