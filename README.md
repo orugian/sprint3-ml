@@ -8,24 +8,15 @@ Previsão de risco de sinistro no seguro rural da **Sompo Seguros**, a partir de
 dados públicos oficiais do Programa de Subvenção ao Prêmio do Seguro Rural (PSR).
 
 ---
+## Equipe — 1TIAPZ
 
-## O que foi entregue
-
-| # | Requisito do desafio | Como foi atendido | Seção |
-|---|---|---|---|
-| 1 | Preparação — *scaling* | `StandardScaler` dentro do `Pipeline` (indispensável para o KNN) | 5.2 |
-| 1 | Preparação — *encoding* | `OneHotEncoder` nas 3 categóricas + *frequency encoding* do município | 4.4 e 5.2 |
-| 2 | Treinamento — ≥ 2 modelos | **KNN**, **Random Forest** e **Gradient Boosting** (+ baseline `Dummy`) | 6 |
-| 3 | Validação — **holdout** | Holdout estratificado 80/20, intocado durante todo o tuning | 5.3 |
-| 3 | Métricas de classificação | accuracy, precision, recall, f1-score, AUC-ROC (+ AP e CV k=5) | 7 |
-| 3 | Métricas de regressão | MAE, RMSE, R² sobre a severidade em R$ | 9 |
-| 4 | Tuning de hiperparâmetros | `GridSearchCV`; **k do KNN** otimizado, mais RF e GB | 8 |
-| 5 | Interpretação do risco | 3 técnicas: importância de impureza + permutation individual + **permutation por bloco** (corrige a diluição entre variáveis correlacionadas) | 10 |
-
-**Além do exigido:** auditoria anti-vazamento coluna a coluna das 38 originais
-(Seção 4.5), validação temporal *out-of-time* (Seção 11), **decomposição do AUC** em
-efeito de coorte, vazamento de grupo e falha real de transferência (Seção 11.2),
-comparativo direto com a Sprint 2 (Seção 12) e persistência dos modelos (Seção 13).
+| Integrante | RM |
+|---|---|
+| Guilherme Orugian | 572882 |
+| Rodrigo Bettio | 573725 |
+| Rafael Jun Aita Hirata | 569708 |
+| Lucas Henrique | 571901 |
+| Vinicius Eddo | 571008 |
 
 ---
 
